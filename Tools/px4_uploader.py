@@ -64,6 +64,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
 from typing import Optional
+from typing import Tuple
 
 # Check Python version early
 if sys.version_info < (3, 7):
@@ -243,7 +244,8 @@ class ProtocolConfig:
 # =============================================================================
 
 # Known VID/PID combinations for PX4 bootloaders and devices
-PX4_USB_IDS: list[tuple[int, int, str]] = [
+from typing import List, Tuple
+PX4_USB_IDS: List[Tuple[int, int, str]] = [
     # (Vendor ID, Product ID, Description)
     (0x26AC, 0x0010, "3D Robotics PX4 FMU"),
     (0x26AC, 0x0011, "3D Robotics PX4 BL"),
@@ -810,7 +812,7 @@ class BootloaderProtocol:
         self._get_sync()
         return value
 
-    def _get_chip_description(self) -> tuple[str, str]:
+    def _get_chip_description(self) -> Tuple[str, str]:
         """Get chip family and revision.
 
         Returns:
@@ -1181,7 +1183,7 @@ class BootloaderProtocol:
                 pass
 
     def send_reboot_commands(
-        self, baudrates: list[int], use_protocol_splitter: bool = False
+        self, baudrates: List[int], use_protocol_splitter: bool = False
     ) -> bool:
         """Send reboot commands to try to enter bootloader.
 
@@ -1283,7 +1285,7 @@ class PortDetector:
     def __init__(self):
         self.platform = sys.platform
 
-    def detect_ports(self) -> list[str]:
+    def detect_ports(self) -> List[str]:
         """Detect available PX4-compatible serial ports.
 
         Returns:
@@ -1310,7 +1312,7 @@ class PortDetector:
         logger.info(f"Detected {len(result)} potential ports: {result}")
         return result
 
-    def _detect_by_vid_pid(self) -> list[str]:
+    def _detect_by_vid_pid(self) -> List[str]:
         """Detect ports by USB Vendor/Product ID.
 
         Returns:
@@ -1332,7 +1334,7 @@ class PortDetector:
 
         return ports
 
-    def _detect_by_patterns(self) -> list[str]:
+    def _detect_by_patterns(self) -> List[str]:
         """Detect ports by platform-specific glob patterns.
 
         Returns:
@@ -1354,7 +1356,7 @@ class PortDetector:
 
         return list(set(ports))
 
-    def expand_patterns(self, patterns: list[str]) -> list[str]:
+    def expand_patterns(self, patterns: List[str]) -> List[str]:
         """Expand glob patterns to actual port paths.
 
         Args:
@@ -1566,7 +1568,7 @@ class UploaderConfig:
 
     port: Optional[str] = None
     baud_bootloader: int = 115200
-    baud_flightstack: list[int] = field(default_factory=lambda: [57600])
+    baud_flightstack: List[int] = field(default_factory=lambda: [57600])
     force: bool = False
     force_erase: bool = False
     boot_delay: Optional[int] = None
@@ -1621,7 +1623,7 @@ class Uploader:
                 print(f"Flash: {kwargs['flash_size']} bytes")
                 print(f"Windowed mode: {'yes' if kwargs.get('windowed') else 'no'}")
 
-    def upload(self, firmware_paths: list[str]) -> bool:
+    def upload(self, firmware_paths: List[str]) -> bool:
         """Upload firmware to connected board.
 
         Args:
@@ -1684,7 +1686,7 @@ class Uploader:
             raise last_error
         raise ConnectionError("No bootloader found on any port")
 
-    def _upload_to_port(self, port: str, firmwares: list[Firmware]) -> bool:
+    def _upload_to_port(self, port: str, firmwares: List[Firmware]) -> bool:
         """Attempt upload on a specific port.
 
         Args:
@@ -1824,7 +1826,7 @@ class Uploader:
         return False
 
     def _select_firmware(
-        self, firmwares: list[Firmware], protocol: BootloaderProtocol
+        self, firmwares: List[Firmware], protocol: BootloaderProtocol
     ) -> Firmware:
         """Select appropriate firmware for the board.
 

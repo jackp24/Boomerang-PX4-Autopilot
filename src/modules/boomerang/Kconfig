@@ -1,0 +1,5 @@
+menuconfig MODULES_BOOMERANG
+	bool "boomerang controller"
+	default n
+	---help---
+		Boomerang custom control module

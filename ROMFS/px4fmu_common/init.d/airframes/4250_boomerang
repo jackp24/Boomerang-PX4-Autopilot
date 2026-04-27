@@ -1,0 +1,62 @@
+#!/bin/sh
+#
+# Propeller-driven helicopter blade vehicle
+#
+# @name Boomerang
+# @type Quadrotor x
+# @class Copter
+#
+
+#
+# Source multicopter parameter defaults.
+# This sets VEHICLE_TYPE=mc, MAV_TYPE, NAV_ACC_RAD, RTL altitudes,
+# EKF2_RNG_FOG, and IMU_GYRO_RATEMAX. Safe to source unchanged.
+#
+
+echo "START AIRFRAME"
+
+
+. ${R}etc/init.d/rc.mc_defaults
+
+echo "AFTER MC DEFAULTS"
+
+# Tell rcS to source our custom apps script instead of rc.mc_apps.
+# rcS checks this variable and skips the default mc apps entirely when set.
+set CUSTOM_APPS ${R}etc/init.d/rc.boomerang_apps
+
+# Disable yaw control — no yaw authority on this vehicle
+param set-default MC_YAW_WEIGHT 0.0
+
+# Conservative cyclic limits for initial tuning
+param set-default BC_CYC_PHASE   1.5708
+param set-default BC_CYC_MAX_DEF 0.2
+
+# RPM limits — adjust to match your hardware
+param set-default BC_RPM_MIN   200.0
+param set-default BC_RPM_MAX   320.0
+param set-default BC_RPM_HOVER 260.0
+
+# Hover thrust fraction: (hover_rpm - rpm_min) / (rpm_max - rpm_min)
+# = (260 - 200) / (320 - 200) = 0.5
+# Update after measuring actual hover RPM on first flight
+param set-default MPC_THR_HOVER 0.5
+
+# Conservative attitude gains — cyclic response is slower than a
+# multicopter (one full rotor revolution per cyclic input cycle)
+param set-default MC_ROLL_P  2.5
+param set-default MC_PITCH_P 2.5
+param set-default MC_ROLLRATE_MAX  60.0
+param set-default MC_PITCHRATE_MAX 60.0
+
+# Conservative position controller gains for first flights
+param set-default MPC_Z_VEL_P_ACC  2.0
+param set-default MPC_Z_VEL_I_ACC  0.4
+param set-default MPC_XY_VEL_P_ACC 1.5
+
+#
+# Start apps — custom script that omits control_allocator
+# and mc_rate_control, and adds boomerang_controller.
+#
+. ${R}etc/init.d/rc.boomerang_apps
+
+echo "AFTER BOOMERANG APPS"

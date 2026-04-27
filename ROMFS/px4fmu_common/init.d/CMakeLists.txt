@@ -41,6 +41,12 @@ px4_add_romfs_files(
 	rc.sensors
 	rc.vehicle_setup
 
+	rc.heli_defaults
+	rc.mc_apps
+	rc.mc_defaults
+
+	rc.boomerang_apps
+
 	# TODO
 	rc.balloon_apps
 	rc.balloon_defaults
