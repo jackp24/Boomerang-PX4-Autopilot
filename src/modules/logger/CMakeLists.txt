@@ -55,7 +55,6 @@ px4_add_module(
 		log_writer_file.cpp
 		log_writer_mavlink.cpp
 		util.cpp
-		util_parse.cpp
 		watchdog.cpp
 	DEPENDS
 		version
@@ -63,11 +62,3 @@ px4_add_module(
 	)
 
 px4_add_unit_gtest(SRC ULogMessagesTest.cpp)
-
-if(BUILD_TESTING)
-	# Separate library for pure parsing functions (testable without PX4 dependencies)
-	add_library(logger_util_parse STATIC util_parse.cpp)
-	target_include_directories(logger_util_parse PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-endif()
-
-px4_add_unit_gtest(SRC loggerUtilTest.cpp LINKLIBS logger_util_parse)

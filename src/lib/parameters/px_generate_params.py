@@ -18,15 +18,13 @@ except ImportError as e:
     sys.exit(1)
 
 import os
-from px4params.readonly_config import load_readonly_params
 
-def generate(xml_file, dest='.', readonly_config=None):
+def generate(xml_file, dest='.'):
     """
     Generate px4 param source from xml.
 
     @param xml_file: input parameter xml file
     @param dest: Destination directory for generated files
-    @param readonly_config: path to readonly_params.yaml (optional)
         None means to scan everything.
     """
     # pylint: disable=broad-except
@@ -40,9 +38,6 @@ def generate(xml_file, dest='.', readonly_config=None):
                 params.append(param)
 
     params = sorted(params, key=lambda name: name.attrib["name"])
-
-    all_param_names = set(p.attrib["name"] for p in params)
-    readonly_params = load_readonly_params(readonly_config, all_param_names)
 
     script_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -60,14 +55,13 @@ def generate(xml_file, dest='.', readonly_config=None):
         template = env.get_template(template_file)
         with open(os.path.join(
                 dest, template_file.replace('.jinja','')), 'w') as fid:
-            fid.write(template.render(params=params, readonly_params=readonly_params))
+            fid.write(template.render(params=params))
 
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--xml", help="parameter xml file")
     arg_parser.add_argument("--dest", help="destination path", default=os.path.curdir)
-    arg_parser.add_argument("--readonly-config", help="path to readonly_params.yaml", default=None)
     args = arg_parser.parse_args()
-    generate(xml_file=args.xml, dest=args.dest, readonly_config=args.readonly_config)
+    generate(xml_file=args.xml, dest=args.dest)
 
 #  vim: set et fenc=utf-8 ff=unix sts=4 sw=4 ts=4 :

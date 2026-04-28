@@ -59,6 +59,7 @@ extern "C" {
 #include <lib/geo/geo.h>
 #include <lib/perf/perf_counter.h>
 #include <px4_platform_common/px4_config.h>
+#include <px4_platform_common/module.h>
 #include <px4_platform_common/px4_work_queue/ScheduledWorkItem.hpp>
 #include <uORB/Publication.hpp>
 #include <uORB/SubscriptionInterval.hpp>
@@ -95,6 +96,7 @@ public:
 	int print_status() override;
 
 private:
+
 	bool init();
 	bool configure();
 
@@ -107,10 +109,6 @@ private:
 
 	void sensorCallback(VnUartPacket *packet);
 
-private:
-	DEFINE_PARAMETERS(
-		(ParamInt<px4::params::VN_MODE>) _param_vn_mode
-	)
 	char _port[20] {};
 
 	bool _initialized{false};
@@ -160,6 +158,7 @@ private:
 	perf_counter_t _local_position_pub_interval_perf{perf_alloc(PC_INTERVAL, MODULE_NAME": local position publish interval")};
 	perf_counter_t _global_position_pub_interval_perf{perf_alloc(PC_INTERVAL, MODULE_NAME": global position publish interval")};
 
+
 	// TODO: params for GNSS antenna offsets
 	// A
 	// B
@@ -181,4 +180,8 @@ private:
 	// VN_GNSS_ANTB_POS_X
 
 	// Uncertainty in the X-axis position measurement.
+
+	DEFINE_PARAMETERS(
+		(ParamInt<px4::params::VN_MODE>) _param_vn_mode
+	)
 };

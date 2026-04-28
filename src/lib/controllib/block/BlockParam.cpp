@@ -37,7 +37,6 @@
  * Controller library code
  */
 
-#include "Block.hpp"
 #include "BlockParam.hpp"
 
 #include <cstdio>

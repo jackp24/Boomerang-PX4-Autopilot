@@ -218,7 +218,7 @@ private:
 	SbgErrorCode sendMagLog(SbgEComHandle *handle, SbgEcom *instance);
 
 	void set_device_id(uint32_t device_id);
-	uint32_t get_device_id();
+	uint32_t get_device_id(void);
 
 	// SBG interface and state variables
 	SbgInterface _sbg_interface;
@@ -241,7 +241,7 @@ private:
 	int init_result;
 
 	MapProjection _pos_ref{};
-	double _gps_alt_ref{static_cast<double>(NAN)};
+	double _gps_alt_ref{NAN};
 
 	struct GnssData {
 		bool pos_received = false;

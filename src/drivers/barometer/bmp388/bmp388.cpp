@@ -210,14 +210,15 @@ BMP388::collect()
 bool
 BMP388::soft_reset()
 {
+	bool    result = false;
 	uint8_t status;
-	int ret = _interface->get_reg(BMP3_SENS_STATUS_REG_ADDR, &status);
+	int     ret;
+
+	ret = _interface->get_reg(BMP3_SENS_STATUS_REG_ADDR, &status);
 
 	if (ret != OK) {
 		return false;
 	}
-
-	bool result = false;
 
 	if (status & BMP3_CMD_RDY) {
 		ret = _interface->set_reg(BPM3_CMD_SOFT_RESET, BMP3_CMD_ADDR);
@@ -247,9 +248,16 @@ BMP388::soft_reset()
 static int8_t cal_crc(uint8_t seed, uint8_t data)
 {
 	int8_t poly = 0x1D;
+	int8_t var2;
+	uint8_t i;
 
-	for (uint8_t i = 0; i < 8; i++) {
-		int8_t var2 = ((seed & 0x80) ^ (data & 0x80)) ? 1 : 0;
+	for (i = 0; i < 8; i++) {
+		if ((seed & 0x80) ^ (data & 0x80)) {
+			var2 = 1;
+
+		} else {
+			var2 = 0;
+		}
 
 		seed = (seed & 0x7F) << 1;
 		data = (data & 0x7F) << 1;
@@ -268,6 +276,7 @@ bool
 BMP388::validate_trimming_param()
 {
 	uint8_t crc = 0xFF;
+	uint8_t stored_crc;
 	uint8_t *trim_param = (uint8_t *)_cal;
 
 	static_assert(BMP3_CALIB_DATA_LEN <= sizeof(*_cal), "unexpected struct size");
@@ -277,8 +286,6 @@ BMP388::validate_trimming_param()
 	}
 
 	crc = (crc ^ 0xFF);
-
-	uint8_t stored_crc;
 
 	if (_interface->get_reg(BMP3_TRIM_CRC_DATA_ADDR, &stored_crc) != OK) {
 		return false;
@@ -418,14 +425,18 @@ BMP388::set_sensor_settings()
 bool
 BMP388::set_op_mode(uint8_t op_mode)
 {
+	bool    result = false;
+	uint8_t last_set_mode;
 	uint8_t op_mode_reg_val;
-	int ret = _interface->get_reg(BMP3_PWR_CTRL_ADDR, &op_mode_reg_val);
+	int     ret = OK;
+
+	ret = _interface->get_reg(BMP3_PWR_CTRL_ADDR, &op_mode_reg_val);
 
 	if (ret != OK) {
 		return false;
 	}
 
-	uint8_t last_set_mode = BMP3_GET_BITS(op_mode_reg_val, BMP3_OP_MODE);
+	last_set_mode = BMP3_GET_BITS(op_mode_reg_val, BMP3_OP_MODE);
 
 	/* Device needs to be put in sleep mode to transition */
 	if (last_set_mode != BMP3_SLEEP_MODE) {
@@ -438,8 +449,6 @@ BMP388::set_op_mode(uint8_t op_mode)
 
 		px4_usleep(BMP3_POST_SLEEP_WAIT_TIME);
 	}
-
-	bool result = false;
 
 	if (ret == OK) {
 		ret = _interface->get_reg(BMP3_PWR_CTRL_ADDR, &op_mode_reg_val);
@@ -469,9 +478,13 @@ BMP388::set_op_mode(uint8_t op_mode)
  */
 static void parse_sensor_data(const uint8_t *reg_data, struct bmp3_uncomp_data *uncomp_data)
 {
-	uint32_t data_xlsb = (uint32_t)reg_data[0];
-	uint32_t data_lsb = (uint32_t)reg_data[1] << 8;
-	uint32_t data_msb = (uint32_t)reg_data[2] << 16;
+	uint32_t data_xlsb;
+	uint32_t data_lsb;
+	uint32_t data_msb;
+
+	data_xlsb = (uint32_t)reg_data[0];
+	data_lsb = (uint32_t)reg_data[1] << 8;
+	data_msb = (uint32_t)reg_data[2] << 16;
 	uncomp_data->pressure = data_msb | data_lsb | data_xlsb;
 
 	data_xlsb = (uint32_t)reg_data[3];
@@ -490,16 +503,24 @@ static void parse_sensor_data(const uint8_t *reg_data, struct bmp3_uncomp_data *
  */
 static int64_t compensate_temperature(const struct bmp3_uncomp_data *uncomp_data, struct bmp3_calib_data *calib_data)
 {
-	int64_t partial_data1 = ((int64_t)uncomp_data->temperature - (256 * calib_data->reg_calib_data.par_t1));
-	int64_t partial_data2 = calib_data->reg_calib_data.par_t2 * partial_data1;
-	int64_t partial_data3 = (partial_data1 * partial_data1);
-	int64_t partial_data4 = (int64_t)partial_data3 * calib_data->reg_calib_data.par_t3;
-	int64_t partial_data5 = ((int64_t)(partial_data2 * 262144) + partial_data4);
-	int64_t partial_data6 = partial_data5 / 4294967296;
+	int64_t partial_data1;
+	int64_t partial_data2;
+	int64_t partial_data3;
+	int64_t partial_data4;
+	int64_t partial_data5;
+	int64_t partial_data6;
+	int64_t comp_temp;
+
+	partial_data1 = ((int64_t)uncomp_data->temperature - (256 * calib_data->reg_calib_data.par_t1));
+	partial_data2 = calib_data->reg_calib_data.par_t2 * partial_data1;
+	partial_data3 = (partial_data1 * partial_data1);
+	partial_data4 = (int64_t)partial_data3 * calib_data->reg_calib_data.par_t3;
+	partial_data5 = ((int64_t)(partial_data2 * 262144) + partial_data4);
+	partial_data6 = partial_data5 / 4294967296;
 
 	/* Store t_lin in dev. structure for pressure calculation */
 	calib_data->reg_calib_data.t_lin = partial_data6;
-	int64_t comp_temp = (int64_t)((partial_data6 * 25) / 16384);
+	comp_temp = (int64_t)((partial_data6 * 25) / 16384);
 
 	return comp_temp;
 }
@@ -515,19 +536,27 @@ static uint64_t compensate_pressure(const struct bmp3_uncomp_data *uncomp_data,
 				    const struct bmp3_calib_data *calib_data)
 {
 	const struct bmp3_reg_calib_data *reg_calib_data = &calib_data->reg_calib_data;
+	int64_t partial_data1;
+	int64_t partial_data2;
+	int64_t partial_data3;
+	int64_t partial_data4;
+	int64_t partial_data5;
+	int64_t partial_data6;
+	int64_t offset;
+	int64_t sensitivity;
+	uint64_t comp_press;
 
-	int64_t partial_data1 = reg_calib_data->t_lin * reg_calib_data->t_lin;
-	int64_t partial_data2 = partial_data1 / 64;
-	int64_t partial_data3 = (partial_data2 * reg_calib_data->t_lin) / 256;
-	int64_t partial_data4 = (reg_calib_data->par_p8 * partial_data3) / 32;
-	int64_t partial_data5 = (reg_calib_data->par_p7 * partial_data1) * 16;
-	int64_t partial_data6 = (reg_calib_data->par_p6 * reg_calib_data->t_lin) * 4194304;
-	int64_t offset = (reg_calib_data->par_p5 * 140737488355328) + partial_data4 + partial_data5 + partial_data6;
+	partial_data1 = reg_calib_data->t_lin * reg_calib_data->t_lin;
+	partial_data2 = partial_data1 / 64;
+	partial_data3 = (partial_data2 * reg_calib_data->t_lin) / 256;
+	partial_data4 = (reg_calib_data->par_p8 * partial_data3) / 32;
+	partial_data5 = (reg_calib_data->par_p7 * partial_data1) * 16;
+	partial_data6 = (reg_calib_data->par_p6 * reg_calib_data->t_lin) * 4194304;
+	offset = (reg_calib_data->par_p5 * 140737488355328) + partial_data4 + partial_data5 + partial_data6;
 	partial_data2 = (reg_calib_data->par_p4 * partial_data3) / 32;
 	partial_data4 = (reg_calib_data->par_p3 * partial_data1) * 4;
 	partial_data5 = (reg_calib_data->par_p2 - 16384) * reg_calib_data->t_lin * 2097152;
-	int64_t sensitivity = ((reg_calib_data->par_p1 - 16384) * 70368744177664) + partial_data2 + partial_data4 +
-			      partial_data5;
+	sensitivity = ((reg_calib_data->par_p1 - 16384) * 70368744177664) + partial_data2 + partial_data4 + partial_data5;
 	partial_data1 = (sensitivity / 16777216) * uncomp_data->pressure;
 	partial_data2 = reg_calib_data->par_p10 * reg_calib_data->t_lin;
 	partial_data3 = partial_data2 + (65536 * reg_calib_data->par_p9);
@@ -539,7 +568,7 @@ static uint64_t compensate_pressure(const struct bmp3_uncomp_data *uncomp_data,
 	partial_data2 = (reg_calib_data->par_p11 * partial_data6) / 65536;
 	partial_data3 = (partial_data2 * uncomp_data->pressure) / 128;
 	partial_data4 = (offset / 4) + partial_data1 + partial_data5 + partial_data3;
-	uint64_t comp_press = (((uint64_t)partial_data4 * 25) / (uint64_t)1099511627776);
+	comp_press = (((uint64_t)partial_data4 * 25) / (uint64_t)1099511627776);
 
 	return comp_press;
 }
@@ -560,7 +589,7 @@ BMP388::compensate_data(uint8_t sensor_comp,
 	struct bmp3_reg_calib_data *reg_calib_data = &calib_data.reg_calib_data;
 	memcpy(reg_calib_data, _cal, 21);
 
-	if ((uncomp_data != nullptr) && (comp_data != nullptr)) {
+	if ((uncomp_data != NULL) && (comp_data != NULL)) {
 		if (sensor_comp & (BMP3_PRESS | BMP3_TEMP)) {
 			comp_data->temperature = compensate_temperature(uncomp_data, &calib_data);
 		}
@@ -570,10 +599,10 @@ BMP388::compensate_data(uint8_t sensor_comp,
 		}
 
 	} else {
-		rslt = ERROR;
+		rslt = -1;
 	}
 
-	return (rslt == OK);
+	return (rslt == 0);
 }
 
 /*!
@@ -584,12 +613,13 @@ BMP388::compensate_data(uint8_t sensor_comp,
 bool
 BMP388::get_sensor_data(uint8_t sensor_comp, struct bmp3_data *comp_data)
 {
-	uint8_t reg_data[BMP3_P_T_DATA_LEN] {};
-
-	int8_t rslt = _interface->get_reg_buf(BMP3_SENS_STATUS_REG_ADDR, reg_data, BMP3_P_T_DATA_LEN);
-
 	bool result = false;
-	struct bmp3_uncomp_data uncomp_data {};
+	int8_t rslt;
+
+	uint8_t reg_data[BMP3_P_T_DATA_LEN];
+	struct bmp3_uncomp_data uncomp_data;
+
+	rslt = _interface->get_reg_buf(BMP3_SENS_STATUS_REG_ADDR, reg_data, BMP3_P_T_DATA_LEN);
 
 	if (rslt == OK) {
 		uint8_t status = reg_data[0];

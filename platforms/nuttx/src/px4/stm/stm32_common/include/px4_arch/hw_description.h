@@ -102,7 +102,7 @@ enum Timer {
 #endif
 };
 enum Channel {
-	Channel1 = 0,
+	Channel1 = 1,
 	Channel2,
 	Channel3,
 	Channel4,

@@ -67,7 +67,6 @@ public:
 private:
 	bool setNextMissionItem() override;
 	void setActiveMissionItems() override;
-	MissionTraversalType traversalType() const override { return MissionTraversalType::IgnoreDoJump; }
 	void handleLanding(WorkItemType &new_work_item_type);
 
 	int32_t _mission_index_prior_rtl{INT32_C(-1)};

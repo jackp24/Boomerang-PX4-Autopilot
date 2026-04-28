@@ -39,6 +39,8 @@
 
 #pragma once
 
+#include "Block.hpp"
+
 #include <containers/List.hpp>
 #include <px4_platform_common/defines.h>
 #include <parameters/param.h>

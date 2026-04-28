@@ -42,9 +42,7 @@
 
 void Ekf::controlRangingBeaconFusion(const imuSample &imu_delayed)
 {
-	_fc.rngbcn.available = (_params.ekf2_rngbc_ctrl != 0);
-
-	if (!_ranging_beacon_buffer || !_fc.rngbcn.intended()) {
+	if (!_ranging_beacon_buffer || (_params.ekf2_rngbc_ctrl == 0)) {
 		stopRangingBeaconFusion();
 		return;
 	}

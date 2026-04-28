@@ -15,8 +15,8 @@ The PX4 dev team and community come together to discuss any topic of interest to
 
 ## Who should attend?
 
-- Code Owners
-- Reviewers
+- Core project maintainers
+- Component maintainers
 - Test team lead
 - Dronecode members
 - Community members (you!)

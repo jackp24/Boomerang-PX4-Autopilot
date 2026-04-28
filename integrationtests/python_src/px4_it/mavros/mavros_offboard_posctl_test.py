@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python2
 #***************************************************************************
 #
 #   Copyright (c) 2015 PX4 Development Team. All rights reserved.
@@ -35,6 +35,9 @@
 #
 # @author Andreas Antener <andreas@uaventure.com>
 #
+# The shebang of this file is currently Python2 because some
+# dependencies such as pymavlink don't play well with Python3 yet.
+from __future__ import division
 
 PKG = 'px4'
 
@@ -45,6 +48,7 @@ from geometry_msgs.msg import PoseStamped, Quaternion
 from mavros_msgs.msg import ParamValue
 from mavros_test_common import MavrosTestCommon
 from pymavlink import mavutil
+from six.moves import xrange
 from std_msgs.msg import Header
 from threading import Thread
 from tf.transformations import quaternion_from_euler
@@ -128,7 +132,7 @@ class MavrosOffboardPosctlTest(MavrosTestCommon):
         loop_freq = 2  # Hz
         rate = rospy.Rate(loop_freq)
         reached = False
-        for i in range(timeout * loop_freq):
+        for i in xrange(timeout * loop_freq):
             if self.is_at_position(self.pos.pose.position.x,
                                    self.pos.pose.position.y,
                                    self.pos.pose.position.z, self.radius):
@@ -170,7 +174,7 @@ class MavrosOffboardPosctlTest(MavrosTestCommon):
         positions = ((0, 0, 0), (50, 50, 20), (50, -50, 20), (-50, -50, 20),
                      (0, 0, 20))
 
-        for i in range(len(positions)):
+        for i in xrange(len(positions)):
             self.reach_position(positions[i][0], positions[i][1],
                                 positions[i][2], 30)
 

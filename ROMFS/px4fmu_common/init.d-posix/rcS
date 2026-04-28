@@ -249,7 +249,7 @@ fi
 
 load_mon start
 
-if param greater SIM_BAT_DRAIN 0
+if param compare SIM_BAT_ENABLE 1
 then
 	battery_simulator start
 fi

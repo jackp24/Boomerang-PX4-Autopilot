@@ -61,7 +61,6 @@ class Parameter(object):
         self.category = ""
         self.volatile = False
         self.boolean = False
-        self.readonly = False
 
     def GetName(self):
         return self.name
@@ -80,9 +79,6 @@ class Parameter(object):
 
     def GetBoolean(self):
         return self.boolean
-
-    def GetReadonly(self):
-        return self.readonly
 
     def SetField(self, code, value):
         """
@@ -113,12 +109,6 @@ class Parameter(object):
         Set boolean flag
         """
         self.boolean = True
-
-    def SetReadonly(self):
-        """
-        Set readonly flag
-        """
-        self.readonly = True
 
     def SetCategory(self, category):
         """

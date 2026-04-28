@@ -15,7 +15,7 @@ actuator_output:
         description:
             short: Output Protocol Configuration for ${label}
             long: |
-                Select the output protocol for ${label}: PWM, OneShot, DShot, or Bidirectional DShot.
+                Select which Output Protocol to use for outputs ${label}.
 
                 Custom PWM rates can be used by directly setting any value >0.
         type: enum

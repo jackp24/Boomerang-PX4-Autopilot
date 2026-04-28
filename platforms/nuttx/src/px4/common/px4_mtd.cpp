@@ -300,7 +300,6 @@ int px4_mtd_config(const px4_mtd_manifest_t *mft_mtd)
 
 	for (uint8_t i = num_instances, num_entry = 0u; i < total_new_instances; ++i, ++num_entry) {
 
-		rv = -ENOMEM;
 		instances[i] = new mtd_instance_s;
 
 		if (instances[i] == nullptr) {
@@ -316,6 +315,7 @@ memoryout:
 		instances[i]->mtd_dev = nullptr;
 		instances[i]->n_partitions_current = 0;
 
+		rv = -ENOMEM;
 		instances[i]->part_dev = new FAR struct mtd_dev_s *[nparts];
 
 		if (instances[i]->part_dev == nullptr) {
@@ -358,12 +358,8 @@ memoryout:
 #endif
 
 		} else if (mtd_list->entries[num_entry]->device->bus_type == px4_mft_device_t::ONCHIP) {
-			/* ONCHIP type is registered externally.
-			 * Populate the query table for all partitions and skip the MTD attach / geometry
-			 * steps. */
-			instances[i]->n_partitions_current = nparts;
-			rv = 0;
-			continue;
+			instances[i]->n_partitions_current++;
+			return 0;
 		}
 
 		if (rv != 0) {

@@ -6,14 +6,14 @@
 
 // Translate RegisterExtComponentRequest v0 <--> v1
 #include <px4_msgs_old/msg/register_ext_component_request_v0.hpp>
-#include <px4_msgs_old/msg/register_ext_component_request_v1.hpp>
+#include <px4_msgs/msg/register_ext_component_request.hpp>
 
 class RegisterExtComponentRequestV1Translation {
 public:
     using MessageOlder = px4_msgs_old::msg::RegisterExtComponentRequestV0;
     static_assert(MessageOlder::MESSAGE_VERSION == 0);
 
-    using MessageNewer = px4_msgs_old::msg::RegisterExtComponentRequestV1;
+    using MessageNewer = px4_msgs::msg::RegisterExtComponentRequest;
     static_assert(MessageNewer::MESSAGE_VERSION == 1);
 
     static constexpr const char* kTopic = "fmu/in/register_ext_component_request";

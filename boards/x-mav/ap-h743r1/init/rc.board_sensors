@@ -17,7 +17,10 @@ then
 fi
 
 # baro
-spl06 -I  start -a 0x76
+if ! dps310 -I start -a 0x76
+then
+	spl06 -I  start -a 0x76
+fi
 
 # internal mag
 qmc5883p -I -R 4 start

@@ -75,8 +75,7 @@ void UavcanGyroBridge::imu_sub_cb(const uavcan::ReceivedDataStructure<uavcan::eq
 		return;
 	}
 
-	const hrt_abstime timestamp_sample = (msg.timestamp.usec > 0) ? msg.timestamp.usec : hrt_absolute_time();
-	gyro->update(timestamp_sample,
+	gyro->update(hrt_absolute_time(),
 		     msg.rate_gyro_latest[0],
 		     msg.rate_gyro_latest[1],
 		     msg.rate_gyro_latest[2]);

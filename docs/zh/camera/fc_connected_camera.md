@@ -1,4 +1,4 @@
-# 连接飞控输出的相机
+# Cameras Connected to Flight Controller Outputs
 
 This topic explains how to use PX4 with a [camera](../camera/index.md) that is attached to flight controller outputs.
 

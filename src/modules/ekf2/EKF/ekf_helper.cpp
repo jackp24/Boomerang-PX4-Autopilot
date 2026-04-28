@@ -826,7 +826,7 @@ void Ekf::updateHorizontalDeadReckoningstatus()
 		inertial_dead_reckoning = false;
 
 	} else {
-		if (!_control_status.flags.in_air && _fc.of.intended()
+		if (!_control_status.flags.in_air && (_params.ekf2_of_ctrl == 1)
 		    && isRecent(_aid_src_optical_flow.timestamp_sample, _params.no_aid_timeout_max)
 		   ) {
 			// currently landed, but optical flow aiding should be possible once in air
@@ -853,7 +853,7 @@ void Ekf::updateHorizontalDeadReckoningstatus()
 
 		if (!_control_status.flags.in_air && _control_status.flags.fixed_wing
 		    && (_params.ekf2_fuse_beta == 1)
-		    && _fc.aspd.intended() && isRecent(_aid_src_airspeed.timestamp_sample, _params.no_aid_timeout_max)
+		    && (_params.ekf2_arsp_thr > 0.f) && isRecent(_aid_src_airspeed.timestamp_sample, _params.no_aid_timeout_max)
 		   ) {
 			// currently landed, but air data aiding should be possible once in air
 			aiding_expected_in_air = true;
@@ -1027,8 +1027,7 @@ void Ekf::updateIMUBiasInhibit(const imuSample &imu_delayed)
 	}
 }
 
-void Ekf::fuseDirectStateMeasurement(const float innov, const float innov_var, const float R, const int state_index,
-				     bool constrain_variances)
+void Ekf::fuseDirectStateMeasurement(const float innov, const float innov_var, const float R, const int state_index)
 {
 	VectorState K;  // Kalman gain vector for any single observation - sequential fusion is used.
 
@@ -1082,9 +1081,7 @@ void Ekf::fuseDirectStateMeasurement(const float innov, const float innov_var, c
 
 #endif
 
-	if (constrain_variances) {
-		constrainStateVariances();
-	}
+	constrainStateVariances();
 
 	// apply the state corrections
 	fuse(K, innov);

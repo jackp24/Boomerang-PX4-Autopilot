@@ -63,7 +63,6 @@ public:
 private:
 	bool setNextMissionItem() override;
 	void setActiveMissionItems() override;
-	MissionTraversalType traversalType() const override { return MissionTraversalType::IgnoreDoJump; }
 
 	int32_t _mission_index_prior_rtl{INT32_C(-1)};
 

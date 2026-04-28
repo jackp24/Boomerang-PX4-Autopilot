@@ -189,41 +189,12 @@ bool VertiqSerialInterface::CheckForRx()
 
 uint8_t *VertiqSerialInterface::ReadAndSetRxBytes()
 {
-	if (_uart_fd < 0 || _bytes_available == 0) {
-		return nullptr;
-	}
+	//Read the bytes available for us
+	read(_uart_fd, _rx_buf, _bytes_available);
 
-	size_t total = 0;
-
-	while (total < _bytes_available) {
-		ssize_t n = read(_uart_fd, _rx_buf + total, _bytes_available - total);
-
-		if (n < 0) {
-			if (errno == EAGAIN) {
-				break; // no more data
-			}
-
-			if (errno == EINTR) {
-				continue; // interrupted. repeat again
-			}
-
-			PX4_ERR("Read failed: %s", strerror(errno));
-			return nullptr;
-		}
-
-		if (n == 0) {
-			break; // EOF or no data
-		}
-
-		total += static_cast<size_t>(n);
-	}
-
-	if (total > 0) {
-		_iquart_interface.SetRxBytes(_rx_buf, total);
-		return _rx_buf;
-	}
-
-	return nullptr;
+	//Put the data into our IQUART handler
+	_iquart_interface.SetRxBytes(_rx_buf, _bytes_available);
+	return _rx_buf;
 }
 
 void VertiqSerialInterface::ProcessSerialRx(ClientAbstract **client_array, uint8_t number_of_clients)
@@ -254,41 +225,10 @@ void VertiqSerialInterface::ProcessSerialTx()
 	//Make sure we can actually talk
 	ReOpenSerial();
 
-	if (_uart_fd < 0) {
-		return;
-	}
-
 	//while there's stuff to write, write it
 	//Clients are responsible for adding TX messages to the buffer through get/set/save commands
 	while (_iquart_interface.GetTxBytes(_tx_buf, _bytes_available)) {
-
-		size_t total = 0;
-
-		while (total < _bytes_available) {
-
-			ssize_t n = write(_uart_fd, _tx_buf + total, _bytes_available - total);
-
-			if (n < 0) {
-
-				if (errno == EAGAIN) {
-					// UART buffer full — try again later
-					break;
-				}
-
-				if (errno == EINTR) {
-					continue; // interrupted. try again
-				}
-
-				PX4_ERR("Write failed: %s", strerror(errno));
-				return;
-			}
-
-			if (n == 0) {
-				break;
-			}
-
-			total += static_cast<size_t>(n);
-		}
+		write(_uart_fd, _tx_buf, _bytes_available);
 	}
 }
 

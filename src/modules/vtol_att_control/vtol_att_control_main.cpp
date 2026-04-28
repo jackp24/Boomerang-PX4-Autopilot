@@ -79,12 +79,6 @@ VtolAttitudeControl::VtolAttitudeControl() :
 		exit_and_cleanup(desc);
 	}
 
-	if (_vtol_type == nullptr) {
-		PX4_ERR("vtol type allocation failed");
-		exit_and_cleanup(desc);
-		return;
-	}
-
 	_flaps_setpoint_pub.advertise();
 	_spoilers_setpoint_pub.advertise();
 	_vtol_vehicle_status_pub.advertise();
@@ -307,12 +301,6 @@ VtolAttitudeControl::Run()
 	}
 
 #endif // !ENABLE_LOCKSTEP_SCHEDULER
-
-	if (_vtol_type == nullptr) {
-		PX4_ERR("vtol type unavailable");
-		exit_and_cleanup(desc);
-		return;
-	}
 
 	if (!_initialized) {
 

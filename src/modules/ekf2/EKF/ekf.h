@@ -137,10 +137,6 @@ public:
 	const Vector3f &getFlowRefBodyRate() const { return _ref_body_rate; }
 #endif // CONFIG_EKF2_OPTICAL_FLOW
 
-#if defined(CONFIG_EKF2_AUX_GLOBAL_POSITION) && defined(MODULE_NAME)
-	uint8_t getAgpFusingBitmask() const { return _aux_global_position.sourceFusingBitmask(); }
-#endif // CONFIG_EKF2_AUX_GLOBAL_POSITION
-
 	float getHeadingInnov() const;
 	float getHeadingInnovVar() const;
 	float getHeadingInnovRatio() const;
@@ -263,10 +259,7 @@ public:
 	}
 
 	// fuse single direct state measurement (eg NED velocity, NED position, mag earth field, etc)
-	// constrain_variances must be false when called from inside constrainStateVar to prevent
-	// unbounded recursion (constrainStateVariances can call back into this function).
-	void fuseDirectStateMeasurement(const float innov, const float innov_var, const float R, const int state_index,
-					bool constrain_variances = true);
+	void fuseDirectStateMeasurement(const float innov, const float innov_var, const float R, const int state_index);
 
 	bool measurementUpdate(VectorState &K, const VectorState &H, const float R, const float innovation);
 
@@ -429,13 +422,11 @@ public:
 
 	void resetHeadingToExternalObservation(float heading, float heading_accuracy)
 	{
-		const float heading_variance = sq(heading_accuracy);
-
 		if (_control_status.flags.yaw_align) {
-			resetYawByFusion(heading, heading_variance);
+			resetYawByFusion(heading, heading_accuracy);
 
 		} else {
-			resetQuatStateYaw(heading, heading_variance);
+			resetQuatStateYaw(heading, heading_accuracy);
 			_control_status.flags.yaw_align = true;
 		}
 

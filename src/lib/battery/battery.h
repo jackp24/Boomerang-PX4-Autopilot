@@ -147,7 +147,6 @@ protected:
 		param_t emergen_thr;
 		param_t source;
 		param_t bat_avrg_current;
-		param_t i_overwrite;
 	} _param_handles{};
 
 	struct {
@@ -160,7 +159,6 @@ protected:
 		float emergen_thr;
 		int32_t source;
 		float bat_avrg_current;
-		float i_overwrite;
 	} _params{};
 
 	const int _index;
@@ -202,7 +200,6 @@ private:
 	hrt_abstime _last_timestamp{0};
 	bool _armed{false};
 	bool _vehicle_status_is_fw{false};
-	bool _vehicle_status_was_fw{false};
 	hrt_abstime _last_unconnected_timestamp{0};
 
 	// Internal Resistance estimation

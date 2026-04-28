@@ -728,7 +728,6 @@ void LogWriterFile::LogFileBuffer::reset()
 {
 	_head = 0;
 	_count = 0;
-	_total_written = 0;
 	_fd = -1;
 }
 

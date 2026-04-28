@@ -82,9 +82,7 @@ void Ekf::controlAirDataFusion(const imuSample &imu_delayed)
 
 #endif // CONFIG_EKF2_GNSS
 
-	_fc.aspd.available = (_params.ekf2_arsp_thr > 0.f);
-
-	if (!_fc.aspd.intended()) {
+	if (_params.ekf2_arsp_thr <= 0.f) {
 		stopAirspeedFusion();
 		return;
 	}

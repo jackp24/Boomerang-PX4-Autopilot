@@ -134,9 +134,8 @@ public:
 private:
 	std::shared_ptr<Ekf> _ekf;
 
-	// Pointers to Ekf internal structs
+	// Pointer to Ekf internal param struct
 	parameters *_ekf_params;
-	FusionControl *_fc;
 
 };
 #endif // !EKF_EKF_WRAPPER_H

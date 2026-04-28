@@ -1,6 +1,6 @@
 # CUAV X25-SUPER
 
-<Badge type="tip" text="PX4 v1.18" />
+<Badge type="tip" text="PX4 v1.18)" />
 
 :::warning
 PX4 does not manufacture this (or any) autopilot.
@@ -21,17 +21,12 @@ The X25-SUPER brings you ultimate performance, stability, and reliability in eve
 
 ### 특징
 
-- Arm® Cortex-M7® processor (STM32H743XI) with Floating-Point Unit (FPU), operating at 480MHz, and featuring 2MB Flash memory.
-  Enables developers to enhance productivity and efficiency, allowing for more complex algorithms and models.
-- Automotive-grade RM3100 compass.
-  Designed for better stability and anti-interference capability.
-- Triple-redundant IMUs and dual-redundant barometers located on separate buses.
-  If the PX4 autopilot detects a sensor failure, the system seamlessly switches to another sensor to maintain flight control reliability.
-- Independent LDO power control supplies power to each sensor group.
-  A vibration isolation system filters high-frequency vibrations and reduces noise to ensure accurate readings, enabling better overall flight performance for the vehicle.
+- Arm® Cortex-M7® processor (STM32H743XI) with Floating-Point Unit (FPU), operating at 480MHz, and featuring 2MB Flash memory. Enables developers to enhance productivity and efficiency, allowing for more complex algorithms and models.
+- Automotive-grade RM3100 compass. Designed for better stability and anti-interference capability.
+- Triple-redundant IMUs and dual-redundant barometers located on separate buses. If the PX4 autopilot detects a sensor failure, the system seamlessly switches to another sensor to maintain flight control reliability.
+- Independent LDO power control supplies power to each sensor group. A vibration isolation system filters high-frequency vibrations and reduces noise to ensure accurate readings, enabling better overall flight performance for the vehicle.
 - Integrated Microchip Ethernet PHY for high-speed communication with onboard devices like mission computers via Ethernet.
-- Dual temperature compensation systems, located on the IMU board and FMU board respectively.
-  Temperature is controlled by onboard heating resistors to achieve the optimal operating temperature for the IMUs.
+- Dual temperature compensation systems, located on the IMU board and FMU board respectively. Temperature is controlled by onboard heating resistors to achieve the optimal operating temperature for the IMUs.
 - PWM servo output voltage switchable between 3.3V or 5V.
 - Modular design for DIY carrier boards.
 
@@ -55,14 +50,14 @@ The X25-SUPER brings you ultimate performance, stability, and reliability in eve
   - Servo Rail Input: 0~9.9V
 - Rated Current:
   - Total Output Max Current: 10A
-  - `TELEM1` and `TELEM2` Output Current limiter: 4A
-  - `CAN1` and `CAN2` Output Current limiter: 2.4A
+  - TELEM1 and TELEM2 Output Current limiter: 4A
+  - CAN1 and CAN2 Output Current limiter: 2.4A
   - Other Ports Output Current limiter: 1.5A
 
 ### 인터페이스
 
 - 16x PWM Servo Outputs
-- 1x Dedicated R/C Input(`RC IN`) for Spektrum / DSM and S.Bus
+- 1x Dedicated R/C Input for Spektrum / DSM and S.Bus
 - 1x Analog/PWM RSSI Input
 - 2x TELEM Ports (with full flow control)
 - 1x UART4 Port
@@ -85,15 +80,16 @@ The X25-SUPER brings you ultimate performance, stability, and reliability in eve
   - DroneCAN/UAVCAN Power Input
 - 2x AD Ports
   - Analog Input (3.3V)
-  - Analog Input (6.6V - not supported by PX4)
+  - Analog Input (6.6V - not supported)
 - 1x Dedicated Debug Port
   - FMU Debug
 
 ### 기계식 부품
 
-- Dimensions:
+- Size
+  - Flight controller
 
-  ![CUAV X25-SUPER](../../assets/flight_controller/cuav_x25-super/x25-super_size.png)
+    ![CUAV X25-SUPER](../../assets/flight_controller/cuav_x25-super/x25-super_size.png)
 
 ## Purchase Channels {#store}
 
@@ -101,7 +97,7 @@ Order from [CUAV](https://store.cuav.net/).
 
 ## 조립 및 설정
 
-The [X25 SUPER Wiring Quick Start](../assembly/quick_start_cuav_x25_evo.md) provides instructions on how to assemble required/important peripherals including GPS, Power Module etc.
+- Not provided.
 
 ## 핀배열
 
@@ -117,7 +113,7 @@ The [X25 SUPER Wiring Quick Start](../assembly/quick_start_cuav_x25_evo.md) prov
 | USART3 | /dev/ttyS2 | 디버그 콘솔 |
 | UART4  | /dev/ttyS3 | UART4  |
 | UART5  | /dev/ttyS4 | TELEM2 |
-| USART6 | /dev/ttyS5 | RC IN  |
+| USART6 | /dev/ttyS5 | RC     |
 | UART7  | /dev/ttyS6 | TELEM1 |
 
 ## RC Input
@@ -126,8 +122,7 @@ The RC input pin is directly connected to the FMU UART6 TX.
 
 ## 정격 전압
 
-The _X25-SUPER_ achieves triple redundancy on power supplies if three power sources are provided.
-The three power rails are `POWERC1`, `POWERC2`, and `USB`.
+The _X25-SUPER_ achieves triple redundancy on power supplies if three power sources are provided. The three power rails are POWERC1, POWERC2, and USB.
 
 - **POWER C1** and **POWER C2** are DroneCAN/UAVCAN battery interfaces.
 
@@ -145,13 +140,13 @@ Digital DroneCAN/UAVCAN battery monitoring is enabled by default.
 ## 펌웨어 빌드
 
 :::tip
-Most users will not need to build this firmware (from PX4 v1.18).
+Most users will not need to build this firmware from PX4 v1.18.
 It is pre-built and automatically installed by _QGroundControl_ when appropriate hardware is connected.
 :::
 
 To [build PX4](../dev_setup/building_px4.md) for this target, execute:
 
-```sh
+```
 make cuav_x25-super_default
 ```
 
