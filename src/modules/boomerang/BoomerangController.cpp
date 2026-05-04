@@ -2,6 +2,21 @@
  * BoomerangController.cpp
  *
  * See BoomerangController.hpp for full architecture documentation.
+ *
+ * Changes vs. original:
+ *   1. OutputStage and CyclicMixer are constructed in init() (after an early
+ *      updateParams()), not lazily in _capture_reference_heading().  This
+ *      ensures actuator_servos is published from the very first tick so the
+ *      PWM output driver always has a valid signal and servos don't buzz.
+ *
+ *   2. WAITING_FOR_EKF and CAPTURING_HEADING both publish a disarmed/neutral
+ *      OutputCommand every tick, keeping servos quiet during startup.
+ *
+ *   3. The EKF-ready gate no longer requires v_xy_valid (which needs GPS).
+ *      attitude.timestamp > 0 is sufficient for bench testing and for
+ *      vehicles that use optical flow or operate without position estimate.
+ *      Re-add && _local_pos.v_xy_valid if you want to enforce GPS before
+ *      arming is possible.
  ****************************************************************************/
 
 #include "BoomerangController.hpp"
@@ -14,11 +29,6 @@
 
 // ---------------------------------------------------------------------------
 // v1.17 Descriptor definition
-//
-// This single static object is the module's "identity" in the new API.
-// ModuleBase::main(), start_command(), stop_command() etc. all operate on
-// it.  The three constructor arguments are plain function pointers — they
-// must match the signatures declared in the header exactly.
 // ---------------------------------------------------------------------------
 ModuleBase::Descriptor BoomerangController::_descriptor{
     &BoomerangController::task_spawn,
@@ -27,15 +37,40 @@ ModuleBase::Descriptor BoomerangController::_descriptor{
 };
 
 // ---------------------------------------------------------------------------
-// Constructor / init
+// Constructor
 // ---------------------------------------------------------------------------
 BoomerangController::BoomerangController()
     : ModuleParams(nullptr)
     , ScheduledWorkItem(MODULE_NAME, px4::wq_configurations::rate_ctrl)
 {}
 
+// ---------------------------------------------------------------------------
+// init
+//
+// Key change: params are loaded here so OutputStage and CyclicMixer can be
+// constructed immediately.  A neutral OutputCommand is then published so the
+// PWM driver has a valid signal before the first Run() tick.
+// ---------------------------------------------------------------------------
 bool BoomerangController::init()
 {
+    // Load parameters before constructing subsystems that depend on them.
+    updateParams();
+
+    _output_stage = new OutputStage(_param_rpm_min.get(), _param_rpm_max.get());
+    _cyclic_mixer = new CyclicMixer(_param_cyc_phase.get(), _param_cyc_max_def.get());
+
+    if (!_output_stage || !_cyclic_mixer) {
+        PX4_ERR("boomerang: subsystem alloc failed");
+        return false;
+    }
+
+    // Publish a neutral/disarmed command immediately so the PWM output driver
+    // has a valid signal.  Without this the servo output pins are undefined
+    // and servos buzz from the moment they are powered.
+    OutputCommand neutral{};
+    neutral.armed = false;
+    _output_stage->write(neutral);
+
     ScheduleOnInterval(static_cast<uint32_t>(1e6f / LOOP_RATE_HZ));
     PX4_INFO("boomerang: started at %.0f Hz", (double)LOOP_RATE_HZ);
     return true;
@@ -48,7 +83,6 @@ void BoomerangController::Run()
 {
     if (should_exit()) {
         ScheduleClear();
-        // v1.17: exit_and_cleanup takes the descriptor, not void
         ModuleBase::exit_and_cleanup(_descriptor);
         return;
     }
@@ -66,16 +100,31 @@ void BoomerangController::Run()
         _update_params();
     }
 
+    // Neutral command reused in pre-RUNNING states to keep servos quiet.
+    // _output_stage is guaranteed non-null after init() succeeds.
+    OutputCommand neutral{};
+    neutral.armed = false;
+
     switch (_state) {
 
     case State::WAITING_FOR_EKF:
-        if (_attitude.timestamp > 0 && _local_pos.v_xy_valid) {
+        // Keep servos at neutral while waiting — prevents buzzing.
+        _output_stage->write(neutral);
+
+        // v_xy_valid (GPS) is NOT required here; attitude.timestamp > 0 means
+        // EKF2 is publishing a valid orientation estimate which is all we need
+        // to start the heading capture.  Re-add && _local_pos.v_xy_valid if
+        // you want to enforce a position fix before proceeding.
+        if (_attitude.timestamp > 0) {
             PX4_INFO("boomerang: EKF valid — capturing heading");
             _state = State::CAPTURING_HEADING;
         }
         break;
 
     case State::CAPTURING_HEADING: {
+        // Keep servos at neutral during heading capture.
+        _output_stage->write(neutral);
+
         const float yaw = matrix::Eulerf(matrix::Quatf(_attitude.q)).psi();
         _heading_sin_sum += sinf(yaw);
         _heading_cos_sum += cosf(yaw);
@@ -102,13 +151,13 @@ void BoomerangController::Run()
         break;
 
     case State::FAULT:
-        if (_output_stage) {
-            OutputCommand zero{};
-            zero.armed = false;
-            _output_stage->write(zero);
-        }
-        if (_attitude.timestamp > 0 && _local_pos.v_xy_valid) {
+        _output_stage->write(neutral);
+        if (_attitude.timestamp > 0) {
             PX4_INFO("boomerang: EKF recovered — re-waiting");
+            // Reset heading capture accumulators for a clean re-capture.
+            _heading_sample_count = 0;
+            _heading_sin_sum      = 0.0f;
+            _heading_cos_sum      = 0.0f;
             _state = State::WAITING_FOR_EKF;
         }
         break;
@@ -131,10 +180,6 @@ void BoomerangController::_update_subscriptions()
 
 // ---------------------------------------------------------------------------
 // _publish_virtual_heading
-//
-// Re-publish vehicle_attitude with spinning yaw replaced by the constant
-// virtual heading, so mc_att_control and Navigator see a stable heading.
-// Roll and pitch from the EKF quaternion are preserved unchanged.
 // ---------------------------------------------------------------------------
 void BoomerangController::_publish_virtual_heading()
 {
@@ -219,7 +264,7 @@ void BoomerangController::_run_control_loop(float dt_s)
                                      _param_rpm_max.get());
 
     // Normalise tilt demand
-    const float tilt_max    = _param_tilt_max.get();
+    const float tilt_max     = _param_tilt_max.get();
     const float cyclic_pitch = math::constrain(desired_pitch_rad / tilt_max, -1.0f, 1.0f);
     const float cyclic_roll  = math::constrain(desired_roll_rad  / tilt_max, -1.0f, 1.0f);
 
@@ -238,6 +283,9 @@ void BoomerangController::_run_control_loop(float dt_s)
 
 // ---------------------------------------------------------------------------
 // _capture_reference_heading
+//
+// Now only responsible for storing the heading and saving it to the param.
+// OutputStage and CyclicMixer are already constructed by init().
 // ---------------------------------------------------------------------------
 void BoomerangController::_capture_reference_heading(float heading_rad)
 {
@@ -248,8 +296,11 @@ void BoomerangController::_capture_reference_heading(float heading_rad)
         param_set(h, &heading_rad);
     }
 
-    _cyclic_mixer = new CyclicMixer(_param_cyc_phase.get(), _param_cyc_max_def.get());
-    _output_stage = new OutputStage(_param_rpm_min.get(), _param_rpm_max.get());
+    // Update subsystems with the now-confirmed param values (user may have
+    // changed them in QGC during the startup window).
+    _cyclic_mixer->set_phase_advance(_param_cyc_phase.get());
+    _cyclic_mixer->set_max_deflection(_param_cyc_max_def.get());
+    _output_stage->set_rpm_limits(_param_rpm_min.get(), _param_rpm_max.get());
 }
 
 // ---------------------------------------------------------------------------
@@ -304,10 +355,6 @@ float BoomerangController::_deadband(float x, float db)
 
 // ---------------------------------------------------------------------------
 // task_spawn
-//
-// Called by ModuleBase::start_command() via the descriptor.
-// Allocates the instance, registers it in the descriptor, and marks it as a
-// work-queue module (task_id_is_work_queue).
 // ---------------------------------------------------------------------------
 int BoomerangController::task_spawn(int argc, char *argv[])
 {
@@ -318,7 +365,6 @@ int BoomerangController::task_spawn(int argc, char *argv[])
         return PX4_ERROR;
     }
 
-    // v1.17: store pointer in descriptor, not in a template static
     _descriptor.object.store(instance);
     _descriptor.task_id = task_id_is_work_queue;
 
@@ -355,8 +401,6 @@ int BoomerangController::print_usage(const char *reason)
 
 // ---------------------------------------------------------------------------
 // Module entry point
-//
-// v1.17: ModuleBase::main() takes the descriptor by reference.
 // ---------------------------------------------------------------------------
 extern "C" __EXPORT int boomerang_main(int argc, char *argv[])
 {
