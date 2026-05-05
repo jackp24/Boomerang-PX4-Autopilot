@@ -399,6 +399,36 @@ int BoomerangController::print_usage(const char *reason)
     return 0;
 }
 
+int BoomerangController::print_status()
+{
+    const char *state_str = "UNKNOWN";
+    switch (_state) {
+        case State::WAITING_FOR_EKF:    state_str = "WAITING_FOR_EKF";    break;
+        case State::CAPTURING_HEADING:  state_str = "CAPTURING_HEADING";  break;
+        case State::RUNNING:            state_str = "RUNNING";             break;
+        case State::FAULT:              state_str = "FAULT";               break;
+    }
+
+    PX4_INFO("state:           %s", state_str);
+    PX4_INFO("virtual heading: %.1f deg", (double)math::degrees(_virtual_heading_rad));
+    PX4_INFO("heading samples: %d / %d", _heading_sample_count, HEADING_SAMPLES);
+
+    if (_azimuth_tracker.state().valid) {
+        PX4_INFO("rotor RPM:       %.1f", (double)_azimuth_tracker.state().rpm);
+        PX4_INFO("blade0 azimuth:  %.1f deg", (double)math::degrees(_azimuth_tracker.state().theta[0]));
+    } else {
+        PX4_INFO("azimuth tracker: not valid");
+    }
+
+    if (_output_stage) {
+        PX4_INFO("output stage:    initialized");
+    } else {
+        PX4_INFO("output stage:    NULL (not yet constructed)");
+    }
+
+    return 0;
+}
+
 // ---------------------------------------------------------------------------
 // Module entry point
 // ---------------------------------------------------------------------------

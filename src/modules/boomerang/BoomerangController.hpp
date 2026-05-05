@@ -123,6 +123,8 @@ public:
     // ---- ScheduledWorkItem interface ----
     void Run() override;
 
+    int print_status() override;
+
 private:
 
     DEFINE_PARAMETERS(
