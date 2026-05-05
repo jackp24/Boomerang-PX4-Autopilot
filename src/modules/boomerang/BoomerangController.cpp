@@ -265,8 +265,12 @@ void BoomerangController::_run_control_loop(float dt_s)
 
     // Normalise tilt demand
     const float tilt_max     = _param_tilt_max.get();
+    d_pitch = desired_pitch_rad;
+    d_roll = desired_roll_rad;
+
     const float cyclic_pitch = math::constrain(desired_pitch_rad / tilt_max, -1.0f, 1.0f);
     const float cyclic_roll  = math::constrain(desired_roll_rad  / tilt_max, -1.0f, 1.0f);
+
 
     // Cyclic mixer
     const CyclicMixerOutput mix = _cyclic_mixer->mix(cyclic_pitch, cyclic_roll, az.theta);
@@ -429,6 +433,12 @@ int BoomerangController::print_status()
     PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[1]);
     PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[2]);
     PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[3]);
+
+     PX4_INFO("tilt_max: %.3f, desired_pitch: %.3f, desired_roll: %.3f",
+             (double)_param_tilt_max.get(),
+             (double)d_pitch,
+             (double)d_roll);
+
     return 0;
 }
 

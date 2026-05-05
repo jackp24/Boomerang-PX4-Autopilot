@@ -126,6 +126,8 @@ public:
     int print_status() override;
 
 private:
+    float d_pitch = 0.0f;
+    float d_roll = 0.0f;
 
     DEFINE_PARAMETERS(
         (ParamFloat<px4::params::BC_CYC_PHASE>)    _param_cyc_phase,
