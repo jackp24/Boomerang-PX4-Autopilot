@@ -5,6 +5,7 @@
 #include "OutputStage.hpp"
 #include <mathlib/mathlib.h>
 #include <px4_platform_common/time.h>
+#include <px4_platform_common/log.h>
 #include <math.h>  // NAN
 
 OutputStage::OutputStage(float rpm_min, float rpm_max)
@@ -60,10 +61,14 @@ void OutputStage::write(const OutputCommand &cmd)
         servos.control[i] = cmd.armed
                             ? math::constrain(cmd.flap_cmd[i], -1.0f, 1.0f)
                             : 0.0f;
+	// servos.control[i] = -0.5f;
+	// PX4_INFO("command : %.1f", (double)cmd.flap_cmd[i]);
     }
     for (int i = NUM_BLADES; i < actuator_servos_s::NUM_CONTROLS; ++i) {
         servos.control[i] = 0.0f;
     }
+
+    last_cmd = cmd;
 
     _pub_servos.publish(servos);
 }

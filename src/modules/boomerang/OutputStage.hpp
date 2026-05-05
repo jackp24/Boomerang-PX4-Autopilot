@@ -70,6 +70,8 @@ public:
     const uORB::Publication<actuator_motors_s>& pub_motors() const { return _pub_motors; }
     const uORB::Publication<actuator_servos_s>& pub_servos() const { return _pub_servos; }
 
+    OutputCommand last_cmd;
+
 private:
     uORB::Publication<actuator_motors_s> _pub_motors{ORB_ID(actuator_motors)};
     uORB::Publication<actuator_servos_s> _pub_servos{ORB_ID(actuator_servos)};

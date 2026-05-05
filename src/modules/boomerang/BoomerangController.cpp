@@ -425,7 +425,10 @@ int BoomerangController::print_status()
     } else {
         PX4_INFO("output stage:    NULL (not yet constructed)");
     }
-
+    PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[0]);
+    PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[1]);
+    PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[2]);
+    PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[3]);
     return 0;
 }
 
