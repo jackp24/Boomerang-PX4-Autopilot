@@ -224,17 +224,16 @@ void BoomerangController::_run_control_loop(float dt_s)
     float desired_roll_rad  = 0.0f;
     float desired_pitch_rad = 0.0f;
 
-    const bool att_sp_from_auto =
-    (_att_sp.timestamp > 0)
-    && _control_mode.flag_control_attitude_enabled
-    && (_control_mode.flag_control_position_enabled   // Position mode
-        || _control_mode.flag_control_velocity_enabled // Altitude mode
-        || _control_mode.flag_control_offboard_enabled); // Offboard
+    const bool att_sp_valid = (_att_sp.timestamp > 0) && _control_mode.flag_control_attitude_enabled && (_control_mode.flag_control_position_enabled || _control_mode.flag_control_velocity_enabled || _control_mode.flag_control_offboard_enabled);
 
-    if (att_sp_from_auto) {
+    if (att_sp_valid) {
         _quat_to_roll_pitch(matrix::Quatf(_att_sp.q_d), desired_roll_rad, desired_pitch_rad);
     } else {
         if (_manual.timestamp > 0) {
+
+	    const float expo = _param_pilot_expo.get();
+	    const float tilt_max = _param_tilt_max.get();
+
             const float raw_pitch = _expo(_deadband(_manual.pitch, 0.05f), expo);
             const float raw_roll  = _expo(_deadband(_manual.roll,  0.05f), expo);
 
