@@ -138,7 +138,9 @@ private:
         (ParamFloat<px4::params::BC_VIRT_HDG>)      _param_virt_hdg,
         (ParamFloat<px4::params::BC_PILOT_EXPO>)    _param_pilot_expo,
         (ParamFloat<px4::params::BC_TILT_MAX>)      _param_tilt_max,
-        (ParamFloat<px4::params::BC_ALT_RATE_MAX>)  _param_alt_rate_max
+        (ParamFloat<px4::params::BC_ALT_RATE_MAX>)  _param_alt_rate_max,
+        (ParamFloat<px4::params::BC_ATT_P>)          _param_att_p,
+        (ParamFloat<px4::params::BC_ATT_D>)          _param_att_d
     )
 
     // ------------------------------------------------------------------

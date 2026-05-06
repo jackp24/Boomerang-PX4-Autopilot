@@ -159,3 +159,35 @@ parameters:
         increment: 0.1
         default: 2.0
         reboot_required: false
+
+      BC_ATT_P:
+        description:
+          short: Attitude P gain
+          long: |
+            Proportional gain for the attitude hold controller.
+            Higher values give faster correction but risk oscillation.
+            Start at 1.0 and increase slowly while bench testing.
+        type: float
+        unit: ''
+        min: 0.0
+        max: 10.0
+        decimal: 2
+        increment: 0.1
+        default: 1.0
+        reboot_required: false
+
+      BC_ATT_D:
+        description:
+          short: Attitude D gain
+          long: |
+            COMMENTED OUT CURRENTLY: Derivative gain for the attitude hold controller.
+            Damps oscillation introduced by BC_ATT_P.
+            Tune after P is stable. Start at 0.0.
+        type: float
+        unit: ''
+        min: 0.0
+        max: 5.0
+        decimal: 3
+        increment: 0.01
+        default: 0.0
+        reboot_required: false

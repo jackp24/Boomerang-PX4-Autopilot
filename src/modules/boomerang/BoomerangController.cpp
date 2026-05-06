@@ -216,33 +216,41 @@ void BoomerangController::_run_control_loop(float dt_s)
     const matrix::Eulerf euler_raw(matrix::Quatf(_attitude.q));
     const float raw_yaw  = euler_raw.psi();
     const float yaw_rate = _ang_vel.xyz[2];
+    const float actual_roll_rad  = euler_raw.phi();
+    const float actual_pitch_rad = euler_raw.theta();
 
     _azimuth_tracker.update(raw_yaw, yaw_rate, hrt_absolute_time());
     const AzimuthState &az = _azimuth_tracker.state();
 
-    // Desired roll/pitch from attitude setpoint
-    float desired_roll_rad  = 0.0f;
-    float desired_pitch_rad = 0.0f;
+    // Desired roll/pitch setpoint (what the pilot or autopilot wants).
+    float setpoint_roll_rad  = 0.0f;
+    float setpoint_pitch_rad = 0.0f;
 
     const bool att_sp_valid = (_att_sp.timestamp > 0) && _control_mode.flag_control_attitude_enabled && (_control_mode.flag_control_position_enabled || _control_mode.flag_control_velocity_enabled || _control_mode.flag_control_offboard_enabled);
 
     if (att_sp_valid) {
-        _quat_to_roll_pitch(matrix::Quatf(_att_sp.q_d), desired_roll_rad, desired_pitch_rad);
-    } else {
-        if (_manual.timestamp > 0) {
+        _quat_to_roll_pitch(matrix::Quatf(_att_sp.q_d), setpoint_roll_rad, setpoint_pitch_rad);
+    } else if (_manual.timestamp > 0) {
+        const float expo     = _param_pilot_expo.get();
+        const float tilt_max = _param_tilt_max.get();
 
-	    const float expo = _param_pilot_expo.get();
-	    const float tilt_max = _param_tilt_max.get();
+        const float raw_pitch = _expo(_deadband(_manual.pitch, 0.05f), expo);
+        const float raw_roll  = _expo(_deadband(_manual.roll,  0.05f), expo);
 
-            const float raw_pitch = _expo(_deadband(_manual.pitch, 0.05f), expo);
-            const float raw_roll  = _expo(_deadband(_manual.roll,  0.05f), expo);
-
-            const float c = cosf(_virtual_heading_rad);
-            const float s = sinf(_virtual_heading_rad);
-            desired_pitch_rad = (raw_pitch * c - raw_roll * s) * tilt_max;
-            desired_roll_rad  = (raw_pitch * s + raw_roll * c) * tilt_max;
-        }
+        const float c = cosf(_virtual_heading_rad);
+        const float s = sinf(_virtual_heading_rad);
+        setpoint_pitch_rad = (raw_pitch * c - raw_roll * s) * tilt_max;
+        setpoint_roll_rad  = (raw_pitch * s + raw_roll * c) * tilt_max;
     }
+
+    // Proportional attitude loop.
+    // Closes the loop that mc_rate_control would have closed.
+    const float att_p = _param_att_p.get();
+    //const float att_d = _param_att_d.get();
+
+    const float desired_pitch_rad = att_p * (setpoint_pitch_rad - actual_pitch_rad) // - att_d * _ang_vel.xyz[1];
+    const float desired_roll_rad  = att_p * (setpoint_roll_rad - actual_roll_rad) // - att_d * _ang_vel.xyz[0];
+
 
     // Collective RPM from thrust setpoint
     float collective_rpm = _param_rpm_hover.get();
