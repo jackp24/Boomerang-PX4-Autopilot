@@ -11,9 +11,7 @@ CyclicMixer::CyclicMixer(float phase_advance_rad, float max_deflection)
     , _max_deflection(max_deflection)
 {}
 
-CyclicMixerOutput CyclicMixer::mix(float cyclic_pitch_ned,
-                                    float cyclic_roll_ned,
-                                    const float theta[NUM_BLADES]) const
+CyclicMixerOutput CyclicMixer::mix(float cyclic_pitch_ned, float cyclic_roll_ned, const float theta[NUM_BLADES]) const
 {
     CyclicMixerOutput out{};
 
@@ -26,8 +24,7 @@ CyclicMixerOutput CyclicMixer::mix(float cyclic_pitch_ned,
         // Despin transform:
         //   When blade i faces North (theta=0): receives full pitch demand.
         //   When blade i faces East  (theta=π/2): receives full roll demand.
-        const float raw = cyclic_pitch_ned * cosf(eff)
-                        + cyclic_roll_ned  * sinf(eff);
+        const float raw = cyclic_pitch_ned * cosf(eff) + cyclic_roll_ned  * sinf(eff);
 
         out.flap_cmd[i] = math::constrain(raw * _max_deflection, -1.0f, 1.0f);
     }

@@ -257,18 +257,14 @@ void BoomerangController::_run_control_loop(float dt_s)
 
     if (att_sp_valid) {
         const float thrust_norm = math::constrain(-_att_sp.thrust_body[2], 0.0f, 1.0f);
-        collective_rpm = _param_rpm_min.get()
-                       + thrust_norm * (_param_rpm_max.get() - _param_rpm_min.get());
+        collective_rpm = _param_rpm_min.get() + thrust_norm * (_param_rpm_max.get() - _param_rpm_min.get());
 
     } else if (_manual.timestamp > 0 && _control_mode.flag_control_manual_enabled) {
         const float throttle = math::constrain(_manual.throttle, 0.0f, 1.0f);
-        collective_rpm = _param_rpm_min.get()
-                       + throttle * (_param_rpm_max.get() - _param_rpm_min.get());
+        collective_rpm = _param_rpm_min.get() + throttle * (_param_rpm_max.get() - _param_rpm_min.get());
     }
 
-    collective_rpm = math::constrain(collective_rpm,
-                                     _param_rpm_min.get(),
-                                     _param_rpm_max.get());
+    collective_rpm = math::constrain(collective_rpm, _param_rpm_min.get(), _param_rpm_max.get());
 
     // Normalise tilt demand
     const float tilt_max     = _param_tilt_max.get();
