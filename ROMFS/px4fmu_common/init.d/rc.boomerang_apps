@@ -10,7 +10,7 @@
 # Safety net: if control_allocator or mc_rate_control were started by
 # any earlier script, stop them now before boomerang takes ownership
 # of actuator_motors and actuator_servos.
-mc_rate_control stop > /dev/null 2>&1
+#mc_rate_control stop > /dev/null 2>&1
 control_allocator stop > /dev/null 2>&1
 
 #
@@ -19,6 +19,7 @@ control_allocator stop > /dev/null 2>&1
 # ignores yaw error (yaw is not controllable on this vehicle).
 #
 mc_att_control start
+mc_rate_control start
 
 #
 # Start Multicopter Position Controller stack.

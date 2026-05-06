@@ -1,22 +1,21 @@
 /****************************************************************************
  * BoomerangController.cpp
  *
- * See BoomerangController.hpp for full architecture documentation.
- *
- * Changes vs. original:
- *   1. OutputStage and CyclicMixer are constructed in init() (after an early
- *      updateParams()), not lazily in _capture_reference_heading().  This
- *      ensures actuator_servos is published from the very first tick so the
- *      PWM output driver always has a valid signal and servos don't buzz.
- *
- *   2. WAITING_FOR_EKF and CAPTURING_HEADING both publish a disarmed/neutral
- *      OutputCommand every tick, keeping servos quiet during startup.
- *
- *   3. The EKF-ready gate no longer requires v_xy_valid (which needs GPS).
- *      attitude.timestamp > 0 is sufficient for bench testing and for
- *      vehicles that use optical flow or operate without position estimate.
- *      Re-add && _local_pos.v_xy_valid if you want to enforce GPS before
- *      arming is possible.
+ * Changes vs. previous revision:
+ *   1. Removed hand-rolled proportional attitude controller.
+ *   2. Added _publish_despun_rates(): overrides vehicle_angular_velocity with
+ *      rates rotated into the virtual (non-spinning) body frame.  mc_rate_control
+ *      reads this and operates entirely in the platform frame.
+ *   3. Added _sub_torque_sp subscription to vehicle_torque_setpoint.
+ *      mc_rate_control writes here; we read roll/pitch and pass into CyclicMixer.
+ *   4. BC_ATT_P / BC_ATT_D parameters removed; replaced by
+ *      BC_TORQUE_ROLL_GAIN / BC_TORQUE_PITCH_GAIN.
+ *   5. vehicle_attitude override priority note: both EKF2 and this module
+ *      publish on ORB_ID(vehicle_attitude).  In PX4 v1.17 the last publisher
+ *      wins on the single-instance topic.  We publish AFTER reading _attitude
+ *      each tick, so our virtual-heading version is always the most recent
+ *      message mc_att_control will see.  Run 'uorb top vehicle_attitude' to
+ *      confirm only one instance exists.
  ****************************************************************************/
 
 #include "BoomerangController.hpp"
@@ -46,14 +45,9 @@ BoomerangController::BoomerangController()
 
 // ---------------------------------------------------------------------------
 // init
-//
-// Key change: params are loaded here so OutputStage and CyclicMixer can be
-// constructed immediately.  A neutral OutputCommand is then published so the
-// PWM driver has a valid signal before the first Run() tick.
 // ---------------------------------------------------------------------------
 bool BoomerangController::init()
 {
-    // Load parameters before constructing subsystems that depend on them.
     updateParams();
 
     _output_stage = new OutputStage(_param_rpm_min.get(), _param_rpm_max.get());
@@ -64,9 +58,7 @@ bool BoomerangController::init()
         return false;
     }
 
-    // Publish a neutral/disarmed command immediately so the PWM output driver
-    // has a valid signal.  Without this the servo output pins are undefined
-    // and servos buzz from the moment they are powered.
+    // Publish neutral command immediately — keeps servos quiet at power-on.
     OutputCommand neutral{};
     neutral.armed = false;
     _output_stage->write(neutral);
@@ -77,7 +69,7 @@ bool BoomerangController::init()
 }
 
 // ---------------------------------------------------------------------------
-// Main loop — called by the work queue every 5 ms (200 Hz)
+// Run — called by the work queue every 5 ms (200 Hz)
 // ---------------------------------------------------------------------------
 void BoomerangController::Run()
 {
@@ -100,21 +92,13 @@ void BoomerangController::Run()
         _update_params();
     }
 
-    // Neutral command reused in pre-RUNNING states to keep servos quiet.
-    // _output_stage is guaranteed non-null after init() succeeds.
     OutputCommand neutral{};
     neutral.armed = false;
 
     switch (_state) {
 
     case State::WAITING_FOR_EKF:
-        // Keep servos at neutral while waiting — prevents buzzing.
         _output_stage->write(neutral);
-
-        // v_xy_valid (GPS) is NOT required here; attitude.timestamp > 0 means
-        // EKF2 is publishing a valid orientation estimate which is all we need
-        // to start the heading capture.  Re-add && _local_pos.v_xy_valid if
-        // you want to enforce a position fix before proceeding.
         if (_attitude.timestamp > 0) {
             PX4_INFO("boomerang: EKF valid — capturing heading");
             _state = State::CAPTURING_HEADING;
@@ -122,7 +106,6 @@ void BoomerangController::Run()
         break;
 
     case State::CAPTURING_HEADING: {
-        // Keep servos at neutral during heading capture.
         _output_stage->write(neutral);
 
         const float yaw = matrix::Eulerf(matrix::Quatf(_attitude.q)).psi();
@@ -146,7 +129,10 @@ void BoomerangController::Run()
             _state = State::FAULT;
             break;
         }
+        // Publish both overrides every tick so upstream modules always see
+        // the virtual frame.  Order matters: attitude first, then rates.
         _publish_virtual_heading();
+        _publish_despun_rates(matrix::Eulerf(matrix::Quatf(_attitude.q)).psi());
         _run_control_loop(dt_s);
         break;
 
@@ -154,7 +140,6 @@ void BoomerangController::Run()
         _output_stage->write(neutral);
         if (_attitude.timestamp > 0) {
             PX4_INFO("boomerang: EKF recovered — re-waiting");
-            // Reset heading capture accumulators for a clean re-capture.
             _heading_sample_count = 0;
             _heading_sin_sum      = 0.0f;
             _heading_cos_sum      = 0.0f;
@@ -176,10 +161,15 @@ void BoomerangController::_update_subscriptions()
     _sub_local_pos.update(&_local_pos);
     _sub_att_sp.update(&_att_sp);
     _sub_manual.update(&_manual);
+    _sub_torque_sp.update(&_torque_sp);
 }
 
 // ---------------------------------------------------------------------------
 // _publish_virtual_heading
+//
+// Overwrites the spinning EKF2 yaw with the fixed virtual heading so that
+// mc_att_control and Navigator see a stable, non-rotating heading.
+// Roll and pitch are passed through unchanged from EKF2.
 // ---------------------------------------------------------------------------
 void BoomerangController::_publish_virtual_heading()
 {
@@ -197,12 +187,47 @@ void BoomerangController::_publish_virtual_heading()
 }
 
 // ---------------------------------------------------------------------------
+// _publish_despun_rates
+//
+// Rotates the raw spinning-frame body rates into the virtual (non-spinning)
+// body frame and publishes the result on vehicle_angular_velocity so that
+// mc_rate_control operates entirely in the platform frame.
+//
+// Transform (rotation by -θ around Z):
+//   p_virt =  p_body * cos(θ) + q_body * sin(θ)
+//   q_virt = -p_body * sin(θ) + q_body * cos(θ)
+//   r_virt =  0   (the spin IS the rotor; there is no platform yaw rate)
+//
+// @param ekf_yaw_rad  Current EKF2 yaw == blade-0 azimuth in NED (radians).
+// ---------------------------------------------------------------------------
+void BoomerangController::_publish_despun_rates(float ekf_yaw_rad)
+{
+    const float p = _ang_vel.xyz[0];
+    const float q = _ang_vel.xyz[1];
+    const float c = cosf(ekf_yaw_rad);
+    const float s = sinf(ekf_yaw_rad);
+
+    const float p_virt =  p * c + q * s;
+    const float q_virt = -p * s + q * c;
+    // r_virt is zeroed — spin is the rotor, not a platform yaw motion.
+    // If a small residual yaw wobble needs to be fed to mc_rate_control,
+    // replace 0.0f with a low-pass filtered (_ang_vel.xyz[2] - omega_rotor).
+
+    _dbg_p_virt = p_virt;
+    _dbg_q_virt = q_virt;
+
+    vehicle_angular_velocity_s ang_vel_out = _ang_vel;
+    ang_vel_out.xyz[0] = p_virt;
+    ang_vel_out.xyz[1] = q_virt;
+    ang_vel_out.xyz[2] = 0.0f;
+    _pub_ang_vel_override.publish(ang_vel_out);
+}
+
+// ---------------------------------------------------------------------------
 // _run_control_loop
 // ---------------------------------------------------------------------------
-void BoomerangController::_run_control_loop(float dt_s)
+void BoomerangController::_run_control_loop(float /*dt_s*/)
 {
-    (void)dt_s;
-
     const bool armed = _is_armed();
 
     if (!armed) {
@@ -212,73 +237,81 @@ void BoomerangController::_run_control_loop(float dt_s)
         return;
     }
 
-    // Azimuth tracker — use raw EKF yaw (pre-patch value in _attitude cache)
+    // -----------------------------------------------------------------------
+    // Azimuth tracker — always uses raw EKF yaw, not the virtual-heading value.
+    // -----------------------------------------------------------------------
     const matrix::Eulerf euler_raw(matrix::Quatf(_attitude.q));
     const float raw_yaw  = euler_raw.psi();
     const float yaw_rate = _ang_vel.xyz[2];
-    const float actual_roll_rad  = euler_raw.phi();
-    const float actual_pitch_rad = euler_raw.theta();
 
     _azimuth_tracker.update(raw_yaw, yaw_rate, hrt_absolute_time());
     const AzimuthState &az = _azimuth_tracker.state();
 
-    // Desired roll/pitch setpoint (what the pilot or autopilot wants).
-    float setpoint_roll_rad  = 0.0f;
-    float setpoint_pitch_rad = 0.0f;
-
-    const bool att_sp_valid = (_att_sp.timestamp > 0) && _control_mode.flag_control_attitude_enabled && (_control_mode.flag_control_position_enabled || _control_mode.flag_control_velocity_enabled || _control_mode.flag_control_offboard_enabled);
-
-    if (att_sp_valid) {
-        _quat_to_roll_pitch(matrix::Quatf(_att_sp.q_d), setpoint_roll_rad, setpoint_pitch_rad);
-    } else if (_manual.timestamp > 0) {
-        const float expo     = _param_pilot_expo.get();
-        const float tilt_max = _param_tilt_max.get();
-
-        const float raw_pitch = _expo(_deadband(_manual.pitch, 0.05f), expo);
-        const float raw_roll  = _expo(_deadband(_manual.roll,  0.05f), expo);
-
-        const float c = cosf(_virtual_heading_rad);
-        const float s = sinf(_virtual_heading_rad);
-        setpoint_pitch_rad = (raw_pitch * c - raw_roll * s) * tilt_max;
-        setpoint_roll_rad  = (raw_pitch * s + raw_roll * c) * tilt_max;
-    }
-
-    // Proportional attitude loop.
-    // Closes the loop that mc_rate_control would have closed.
-    const float att_p = _param_att_p.get();
-    //const float att_d = _param_att_d.get();
-
-    const float desired_pitch_rad = att_p * (setpoint_pitch_rad - actual_pitch_rad);
-    const float desired_roll_rad  = att_p * (setpoint_roll_rad - actual_roll_rad);
-
-
+    // -----------------------------------------------------------------------
     // Collective RPM from thrust setpoint
+    // -----------------------------------------------------------------------
     float collective_rpm = _param_rpm_hover.get();
+
+    const bool att_sp_valid = (_att_sp.timestamp > 0)
+        && _control_mode.flag_control_attitude_enabled
+        && (_control_mode.flag_control_position_enabled
+            || _control_mode.flag_control_velocity_enabled
+            || _control_mode.flag_control_offboard_enabled);
 
     if (att_sp_valid) {
         const float thrust_norm = math::constrain(-_att_sp.thrust_body[2], 0.0f, 1.0f);
-        collective_rpm = _param_rpm_min.get() + thrust_norm * (_param_rpm_max.get() - _param_rpm_min.get());
+        collective_rpm = _param_rpm_min.get()
+                       + thrust_norm * (_param_rpm_max.get() - _param_rpm_min.get());
 
     } else if (_manual.timestamp > 0 && _control_mode.flag_control_manual_enabled) {
         const float throttle = math::constrain(_manual.throttle, 0.0f, 1.0f);
-        collective_rpm = _param_rpm_min.get() + throttle * (_param_rpm_max.get() - _param_rpm_min.get());
+        collective_rpm = _param_rpm_min.get()
+                       + throttle * (_param_rpm_max.get() - _param_rpm_min.get());
     }
 
-    collective_rpm = math::constrain(collective_rpm, _param_rpm_min.get(), _param_rpm_max.get());
+    collective_rpm = math::constrain(collective_rpm,
+                                     _param_rpm_min.get(),
+                                     _param_rpm_max.get());
 
-    // Normalise tilt demand
-    const float tilt_max     = _param_tilt_max.get();
-    d_pitch = desired_pitch_rad;
-    d_roll = desired_roll_rad;
+    // -----------------------------------------------------------------------
+    // Cyclic demand from mc_rate_control torque setpoint
+    //
+    // vehicle_torque_setpoint.xyz is [roll, pitch, yaw] normalised ≈ [-1, 1].
+    // We apply per-axis gain scalars (BC_TORQUE_ROLL_GAIN, BC_TORQUE_PITCH_GAIN)
+    // to translate mc_rate_control's normalised torque into the [-1,1] cyclic
+    // demand our mixer expects.  Start both gains at 1.0 and tune.
+    //
+    // Fallback: if mc_rate_control has not yet published (timestamp == 0) or
+    // in manual mode without attitude control, use zero cyclic (level flight).
+    // -----------------------------------------------------------------------
+    float cyclic_roll  = 0.0f;
+    float cyclic_pitch = 0.0f;
 
-    const float cyclic_pitch = math::constrain(desired_pitch_rad / tilt_max, -1.0f, 1.0f);
-    const float cyclic_roll  = math::constrain(desired_roll_rad  / tilt_max, -1.0f, 1.0f);
+    const bool torque_valid = (_torque_sp.timestamp > 0);
 
+    if (torque_valid && _control_mode.flag_control_attitude_enabled) {
+        // xyz[0] = roll torque, xyz[1] = pitch torque.
+        // Clamp after gain so we never command beyond full servo range.
+        cyclic_roll  = math::constrain(
+            _torque_sp.xyz[0] * _param_torque_roll_gain.get(), -1.0f, 1.0f);
+        cyclic_pitch = math::constrain(
+            _torque_sp.xyz[1] * _param_torque_pitch_gain.get(), -1.0f, 1.0f);
 
-    // Cyclic mixer
+    } else if (_manual.timestamp > 0 && _control_mode.flag_control_manual_enabled) {
+        // Direct manual cyclic in stabilised/manual mode (no mc_rate_control).
+        const float expo = _param_pilot_expo.get();
+        cyclic_pitch = _expo(_deadband(_manual.pitch, 0.05f), expo);
+        cyclic_roll  = _expo(_deadband(_manual.roll,  0.05f), expo);
+    }
+
+    _dbg_torque_roll  = cyclic_roll;
+    _dbg_torque_pitch = cyclic_pitch;
+
+    // -----------------------------------------------------------------------
+    // Cyclic mixer → per-blade flap commands
+    // -----------------------------------------------------------------------
     const CyclicMixerOutput mix = _cyclic_mixer->mix(cyclic_pitch, cyclic_roll, az.theta);
 
-    // Publish actuator commands
     OutputCommand cmd{};
     cmd.armed          = true;
     cmd.collective_rpm = collective_rpm;
@@ -290,9 +323,6 @@ void BoomerangController::_run_control_loop(float dt_s)
 
 // ---------------------------------------------------------------------------
 // _capture_reference_heading
-//
-// Now only responsible for storing the heading and saving it to the param.
-// OutputStage and CyclicMixer are already constructed by init().
 // ---------------------------------------------------------------------------
 void BoomerangController::_capture_reference_heading(float heading_rad)
 {
@@ -303,8 +333,6 @@ void BoomerangController::_capture_reference_heading(float heading_rad)
         param_set(h, &heading_rad);
     }
 
-    // Update subsystems with the now-confirmed param values (user may have
-    // changed them in QGC during the startup window).
     _cyclic_mixer->set_phase_advance(_param_cyc_phase.get());
     _cyclic_mixer->set_max_deflection(_param_cyc_max_def.get());
     _output_stage->set_rpm_limits(_param_rpm_min.get(), _param_rpm_max.get());
@@ -332,17 +360,6 @@ void BoomerangController::_update_params()
 bool BoomerangController::_is_armed() const
 {
     return (_vehicle_status.arming_state == vehicle_status_s::ARMING_STATE_ARMED);
-}
-
-// ---------------------------------------------------------------------------
-// _quat_to_roll_pitch
-// ---------------------------------------------------------------------------
-void BoomerangController::_quat_to_roll_pitch(const matrix::Quatf &q,
-                                              float &roll_rad, float &pitch_rad)
-{
-    const matrix::Eulerf euler(q);
-    roll_rad  = euler.phi();
-    pitch_rad = euler.theta();
 }
 
 // ---------------------------------------------------------------------------
@@ -397,15 +414,21 @@ int BoomerangController::print_usage(const char *reason)
 {
     if (reason) { PX4_WARN("%s\n", reason); }
 
-    PRINT_MODULE_DESCRIPTION("Propeller-driven helicopter blade (boomerang) flight controller.\n"
-        "Replaces mc_rate_control + ControlAllocator.\n"
-        "Requires mc_att_control and mc_pos_control to be running above it.");
+    PRINT_MODULE_DESCRIPTION(
+        "Propeller-driven helicopter blade (boomerang) flight controller.\n"
+        "Replaces ControlAllocator only.  mc_rate_control, mc_att_control,\n"
+        "and mc_pos_control run above it in the standard stack.\n"
+        "Publishes virtual heading and despun body rates to keep all upstream\n"
+        "modules operating in the non-spinning platform frame.");
     PRINT_MODULE_USAGE_NAME("boomerang", "controller");
     PRINT_MODULE_USAGE_COMMAND("start");
     PRINT_MODULE_USAGE_DEFAULT_COMMANDS();
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// print_status
+// ---------------------------------------------------------------------------
 int BoomerangController::print_status()
 {
     const char *state_str = "UNKNOWN";
@@ -416,31 +439,31 @@ int BoomerangController::print_status()
         case State::FAULT:              state_str = "FAULT";               break;
     }
 
-    PX4_INFO("state:           %s", state_str);
-    PX4_INFO("virtual heading: %.1f deg", (double)math::degrees(_virtual_heading_rad));
-    PX4_INFO("heading samples: %d / %d", _heading_sample_count, HEADING_SAMPLES);
+    PX4_INFO("state:              %s", state_str);
+    PX4_INFO("virtual heading:    %.1f deg", (double)math::degrees(_virtual_heading_rad));
+    PX4_INFO("heading samples:    %d / %d", _heading_sample_count, HEADING_SAMPLES);
 
     if (_azimuth_tracker.state().valid) {
-        PX4_INFO("rotor RPM:       %.1f", (double)_azimuth_tracker.state().rpm);
-        PX4_INFO("blade0 azimuth:  %.1f deg", (double)math::degrees(_azimuth_tracker.state().theta[0]));
+        PX4_INFO("rotor RPM:          %.1f", (double)_azimuth_tracker.state().rpm);
+        PX4_INFO("blade0 azimuth:     %.1f deg",
+                 (double)math::degrees(_azimuth_tracker.state().theta[0]));
     } else {
-        PX4_INFO("azimuth tracker: not valid");
+        PX4_INFO("azimuth tracker:    not valid");
     }
+
+    PX4_INFO("despun p_virt:      %.4f rad/s", (double)_dbg_p_virt);
+    PX4_INFO("despun q_virt:      %.4f rad/s", (double)_dbg_q_virt);
+    PX4_INFO("cyclic roll:        %.3f", (double)_dbg_torque_roll);
+    PX4_INFO("cyclic pitch:       %.3f", (double)_dbg_torque_pitch);
+    PX4_INFO("torque_sp valid:    %s", (_torque_sp.timestamp > 0) ? "yes" : "no");
 
     if (_output_stage) {
-        PX4_INFO("output stage:    initialized");
-    } else {
-        PX4_INFO("output stage:    NULL (not yet constructed)");
+        PX4_INFO("flap[0..3]:         %.3f  %.3f  %.3f  %.3f",
+                 (double)_output_stage->last_cmd.flap_cmd[0],
+                 (double)_output_stage->last_cmd.flap_cmd[1],
+                 (double)_output_stage->last_cmd.flap_cmd[2],
+                 (double)_output_stage->last_cmd.flap_cmd[3]);
     }
-    PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[0]);
-    PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[1]);
-    PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[2]);
-    PX4_INFO("command : %.1f", (double)_output_stage->last_cmd.flap_cmd[3]);
-
-     PX4_INFO("tilt_max: %.3f, desired_pitch: %.3f, desired_roll: %.3f",
-             (double)_param_tilt_max.get(),
-             (double)d_pitch,
-             (double)d_roll);
 
     return 0;
 }

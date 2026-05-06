@@ -112,9 +112,10 @@ parameters:
 
       BC_PILOT_EXPO:
         description:
-          short: Pilot stick expo (Stabilised mode)
+          short: Pilot stick expo (manual / stabilised mode)
           long: |
-            Expo coefficient applied to pitch/roll sticks in Stabilised mode.
+            Expo coefficient applied to pitch/roll sticks in manual/stabilised
+            mode (when mc_rate_control is not providing a torque setpoint).
             f(x) = expo * x^3 + (1 - expo) * x.
             0.0 = fully linear.  0.3 = mild expo (recommended starting point).
             1.0 = full cubic (very centre-sensitive).
@@ -160,34 +161,47 @@ parameters:
         default: 2.0
         reboot_required: false
 
-      BC_ATT_P:
+      BC_T_ROLL_GAIN:
         description:
-          short: Attitude P gain
+          short: Roll torque → cyclic gain
           long: |
-            Proportional gain for the attitude hold controller.
-            Higher values give faster correction but risk oscillation.
-            Start at 1.0 and increase slowly while bench testing.
+            Scales mc_rate_control's normalised roll torque output
+            (vehicle_torque_setpoint.xyz[0]) into the [-1, 1] cyclic roll
+            demand fed to CyclicMixer.
+
+            mc_rate_control outputs torque in the range ≈ [-1, 1] based on
+            the rate error and its PID gains.  This gain is a post-multiplier
+            that adjusts how much of that torque demand is translated to flap
+            deflection.  Start at 1.0 and increase if the roll response feels
+            weak, or decrease if it oscillates.
+
+            Tuning order: set BC_TORQUE_PITCH_GAIN to the same value and tune
+            both together first, then trim the ratio between axes if needed.
         type: float
         unit: ''
         min: 0.0
-        max: 10.0
+        max: 5.0
         decimal: 2
         increment: 0.1
         default: 1.0
         reboot_required: false
 
-      BC_ATT_D:
+      BC_T_PITCH_GAIN:
         description:
-          short: Attitude D gain
+          short: Pitch torque → cyclic gain
           long: |
-            COMMENTED OUT CURRENTLY: Derivative gain for the attitude hold controller.
-            Damps oscillation introduced by BC_ATT_P.
-            Tune after P is stable. Start at 0.0.
+            Scales mc_rate_control's normalised pitch torque output
+            (vehicle_torque_setpoint.xyz[1]) into the [-1, 1] cyclic pitch
+            demand fed to CyclicMixer.
+
+            See BC_TORQUE_ROLL_GAIN for tuning guidance.  Pitch and roll
+            aerodynamic authority are usually similar for a symmetric 4-blade
+            rotor so the two gains should end up close to each other.
         type: float
         unit: ''
         min: 0.0
         max: 5.0
-        decimal: 3
-        increment: 0.01
-        default: 0.0
+        decimal: 2
+        increment: 0.1
+        default: 1.0
         reboot_required: false
