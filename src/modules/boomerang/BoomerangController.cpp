@@ -248,8 +248,8 @@ void BoomerangController::_run_control_loop(float dt_s)
     const float att_p = _param_att_p.get();
     //const float att_d = _param_att_d.get();
 
-    const float desired_pitch_rad = att_p * (setpoint_pitch_rad - actual_pitch_rad) // - att_d * _ang_vel.xyz[1];
-    const float desired_roll_rad  = att_p * (setpoint_roll_rad - actual_roll_rad) // - att_d * _ang_vel.xyz[0];
+    const float desired_pitch_rad = att_p * (setpoint_pitch_rad - actual_pitch_rad);
+    const float desired_roll_rad  = att_p * (setpoint_roll_rad - actual_roll_rad);
 
 
     // Collective RPM from thrust setpoint
