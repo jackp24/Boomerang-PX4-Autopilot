@@ -13,13 +13,15 @@
 #mc_rate_control stop > /dev/null 2>&1
 control_allocator stop > /dev/null 2>&1
 
+mc_rate_control start
+
 #
 # Start Multicopter Attitude Controller.
 # mc_att_control runs normally but with MC_YAW_WEIGHT=0 so it
 # ignores yaw error (yaw is not controllable on this vehicle).
 #
 mc_att_control start
-mc_rate_control start
+
 
 #
 # Start Multicopter Position Controller stack.

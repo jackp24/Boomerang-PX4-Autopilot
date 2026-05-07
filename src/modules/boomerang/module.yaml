@@ -180,10 +180,10 @@ parameters:
         type: float
         unit: ''
         min: 0.0
-        max: 5.0
+        max: 20.0
         decimal: 2
         increment: 0.1
-        default: 1.0
+        default: 4.0
         reboot_required: false
 
       BC_T_PITCH_GAIN:
@@ -200,8 +200,8 @@ parameters:
         type: float
         unit: ''
         min: 0.0
-        max: 5.0
+        max: 20.0
         decimal: 2
         increment: 0.1
-        default: 1.0
+        default: 4.0
         reboot_required: false
