@@ -111,6 +111,8 @@ private:
     float _dbg_p_virt{0.0f};
     float _dbg_q_virt{0.0f};
 
+    float _raw_ekf_yaw_rad{0.0f};
+
     DEFINE_PARAMETERS(
         (ParamFloat<px4::params::BC_CYC_PHASE>)      _param_cyc_phase,
         (ParamFloat<px4::params::BC_CYC_MAX_DEF>)    _param_cyc_max_def,

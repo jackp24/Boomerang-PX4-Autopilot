@@ -129,10 +129,11 @@ void BoomerangController::Run()
             _state = State::FAULT;
             break;
         }
-        // Publish both overrides every tick so upstream modules always see
-        // the virtual frame.  Order matters: attitude first, then rates.
+
+        _raw_ekf_yaw_rad = matrix::Eulerf(matrix::Quatf(_attitude.q)).psi();
+
         _publish_virtual_heading();
-        _publish_despun_rates(matrix::Eulerf(matrix::Quatf(_attitude.q)).psi());
+        _publish_despun_rates(_raw_ekf_yaw_rad);
         _run_control_loop(dt_s);
         break;
 
@@ -237,11 +238,7 @@ void BoomerangController::_run_control_loop(float /*dt_s*/)
         return;
     }
 
-    // -----------------------------------------------------------------------
-    // Azimuth tracker — always uses raw EKF yaw, not the virtual-heading value.
-    // -----------------------------------------------------------------------
-    const matrix::Eulerf euler_raw(matrix::Quatf(_attitude.q));
-    const float raw_yaw  = euler_raw.psi();
+    const float raw_yaw  = _raw_ekf_yaw_rad;
     const float yaw_rate = _ang_vel.xyz[2];
 
     _azimuth_tracker.update(raw_yaw, yaw_rate, hrt_absolute_time());
