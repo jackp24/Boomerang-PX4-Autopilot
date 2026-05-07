@@ -269,48 +269,41 @@ void BoomerangController::_run_control_loop(float /*dt_s*/)
                        + throttle * (_param_rpm_max.get() - _param_rpm_min.get());
     }
 
-    collective_rpm = math::constrain(collective_rpm,
-                                     _param_rpm_min.get(),
-                                     _param_rpm_max.get());
+    collective_rpm = math::constrain(collective_rpm, _param_rpm_min.get(), _param_rpm_max.get());
 
-    // -----------------------------------------------------------------------
-    // Cyclic demand from mc_rate_control torque setpoint
-    //
-    // vehicle_torque_setpoint.xyz is [roll, pitch, yaw] normalised ≈ [-1, 1].
-    // We apply per-axis gain scalars (BC_TORQUE_ROLL_GAIN, BC_TORQUE_PITCH_GAIN)
-    // to translate mc_rate_control's normalised torque into the [-1,1] cyclic
-    // demand our mixer expects.  Start both gains at 1.0 and tune.
-    //
-    // Fallback: if mc_rate_control has not yet published (timestamp == 0) or
-    // in manual mode without attitude control, use zero cyclic (level flight).
-    // -----------------------------------------------------------------------
-    float cyclic_roll  = 0.0f;
-    float cyclic_pitch = 0.0f;
+
+    // Cyclic demand — virtual-body frame → NED frame rotation
+    float cyclic_roll_virt  = 0.0f;
+    float cyclic_pitch_virt = 0.0f;
 
     const bool torque_valid = (_torque_sp.timestamp > 0);
 
     if (torque_valid && _control_mode.flag_control_attitude_enabled) {
-        // xyz[0] = roll torque, xyz[1] = pitch torque.
-        // Clamp after gain so we never command beyond full servo range.
-        cyclic_roll  = math::constrain(
-            _torque_sp.xyz[0] * _param_torque_roll_gain.get(), -1.0f, 1.0f);
-        cyclic_pitch = math::constrain(
-            _torque_sp.xyz[1] * _param_torque_pitch_gain.get(), -1.0f, 1.0f);
+        // mc_rate_control outputs torque in the virtual body frame because it
+        // receives our despun rates.  Apply gain then rotate to NED below.
+        cyclic_roll_virt  = math::constrain(_torque_sp.xyz[0] * _param_torque_roll_gain.get(), -1.0f, 1.0f);
+        cyclic_pitch_virt = math::constrain(_torque_sp.xyz[1] * _param_torque_pitch_gain.get(), -1.0f, 1.0f);
 
     } else if (_manual.timestamp > 0 && _control_mode.flag_control_manual_enabled) {
-        // Direct manual cyclic in stabilised/manual mode (no mc_rate_control).
+        // Stick demands are in the pilot/virtual-body frame.
         const float expo = _param_pilot_expo.get();
-        cyclic_pitch = _expo(_deadband(_manual.pitch, 0.05f), expo);
-        cyclic_roll  = _expo(_deadband(_manual.roll,  0.05f), expo);
+        cyclic_pitch_virt = _expo(_deadband(_manual.pitch, 0.05f), expo);
+        cyclic_roll_virt  = _expo(_deadband(_manual.roll,  0.05f), expo);
     }
 
-    _dbg_torque_roll  = cyclic_roll;
-    _dbg_torque_pitch = cyclic_pitch;
+    // Rotate virtual-body frame to NED frame
+    const float c_hdg = cosf(_virtual_heading_rad);
+    const float s_hdg = sinf(_virtual_heading_rad);
+    const float cyclic_pitch_ned =  cyclic_pitch_virt * c_hdg + cyclic_roll_virt * s_hdg;
+    const float cyclic_roll_ned  = -cyclic_pitch_virt * s_hdg + cyclic_roll_virt * c_hdg;
+
+    _dbg_torque_roll  = cyclic_roll_ned;
+    _dbg_torque_pitch = cyclic_pitch_ned;
 
     // -----------------------------------------------------------------------
-    // Cyclic mixer → per-blade flap commands
+    // Cyclic mixer to per-blade flap commands
     // -----------------------------------------------------------------------
-    const CyclicMixerOutput mix = _cyclic_mixer->mix(cyclic_pitch, cyclic_roll, az.theta);
+    const CyclicMixerOutput mix = _cyclic_mixer->mix(cyclic_pitch_ned, cyclic_roll_ned, az.theta);
 
     OutputCommand cmd{};
     cmd.armed          = true;
