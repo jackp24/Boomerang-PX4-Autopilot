@@ -2,20 +2,11 @@
  * BoomerangController.cpp
  *
  * Changes vs. previous revision:
- *   1. Removed hand-rolled proportional attitude controller.
- *   2. Added _publish_despun_rates(): overrides vehicle_angular_velocity with
- *      rates rotated into the virtual (non-spinning) body frame.  mc_rate_control
- *      reads this and operates entirely in the platform frame.
- *   3. Added _sub_torque_sp subscription to vehicle_torque_setpoint.
- *      mc_rate_control writes here; we read roll/pitch and pass into CyclicMixer.
- *   4. BC_ATT_P / BC_ATT_D parameters removed; replaced by
- *      BC_TORQUE_ROLL_GAIN / BC_TORQUE_PITCH_GAIN.
- *   5. vehicle_attitude override priority note: both EKF2 and this module
- *      publish on ORB_ID(vehicle_attitude).  In PX4 v1.17 the last publisher
- *      wins on the single-instance topic.  We publish AFTER reading _attitude
- *      each tick, so our virtual-heading version is always the most recent
- *      message mc_att_control will see.  Run 'uorb top vehicle_attitude' to
- *      confirm only one instance exists.
+ *   - RPM abstraction removed. collective_throttle is a direct 0.0–1.0 value.
+ *   - Removed: _param_rpm_min, _param_rpm_max, _param_rpm_hover.
+ *   - OutputStage constructor takes no arguments.
+ *   - set_rpm_limits() calls removed.
+ *   - OutputCommand::collective_rpm renamed to collective_throttle.
  ****************************************************************************/
 
 #include "BoomerangController.hpp"
@@ -50,7 +41,7 @@ bool BoomerangController::init()
 {
     updateParams();
 
-    _output_stage = new OutputStage(_param_rpm_min.get(), _param_rpm_max.get());
+    _output_stage = new OutputStage();   // no RPM args
     _cyclic_mixer = new CyclicMixer(_param_cyc_phase.get(), _param_cyc_max_def.get());
 
     if (!_output_stage || !_cyclic_mixer) {
@@ -58,7 +49,6 @@ bool BoomerangController::init()
         return false;
     }
 
-    // Publish neutral command immediately — keeps servos quiet at power-on.
     OutputCommand neutral{};
     neutral.armed = false;
     _output_stage->write(neutral);
@@ -167,10 +157,6 @@ void BoomerangController::_update_subscriptions()
 
 // ---------------------------------------------------------------------------
 // _publish_virtual_heading
-//
-// Overwrites the spinning EKF2 yaw with the fixed virtual heading so that
-// mc_att_control and Navigator see a stable, non-rotating heading.
-// Roll and pitch are passed through unchanged from EKF2.
 // ---------------------------------------------------------------------------
 void BoomerangController::_publish_virtual_heading()
 {
@@ -189,17 +175,6 @@ void BoomerangController::_publish_virtual_heading()
 
 // ---------------------------------------------------------------------------
 // _publish_despun_rates
-//
-// Rotates the raw spinning-frame body rates into the virtual (non-spinning)
-// body frame and publishes the result on vehicle_angular_velocity so that
-// mc_rate_control operates entirely in the platform frame.
-//
-// Transform (rotation by -θ around Z):
-//   p_virt =  p_body * cos(θ) + q_body * sin(θ)
-//   q_virt = -p_body * sin(θ) + q_body * cos(θ)
-//   r_virt =  0   (the spin IS the rotor; there is no platform yaw rate)
-//
-// @param ekf_yaw_rad  Current EKF2 yaw == blade-0 azimuth in NED (radians).
 // ---------------------------------------------------------------------------
 void BoomerangController::_publish_despun_rates(float ekf_yaw_rad)
 {
@@ -210,9 +185,6 @@ void BoomerangController::_publish_despun_rates(float ekf_yaw_rad)
 
     const float p_virt =  p * c + q * s;
     const float q_virt = -p * s + q * c;
-    // r_virt is zeroed — spin is the rotor, not a platform yaw motion.
-    // If a small residual yaw wobble needs to be fed to mc_rate_control,
-    // replace 0.0f with a low-pass filtered (_ang_vel.xyz[2] - omega_rotor).
 
     _dbg_p_virt = p_virt;
     _dbg_q_virt = q_virt;
@@ -245,9 +217,9 @@ void BoomerangController::_run_control_loop(float /*dt_s*/)
     const AzimuthState &az = _azimuth_tracker.state();
 
     // -----------------------------------------------------------------------
-    // Collective RPM from thrust setpoint
+    // Collective throttle — direct 0.0–1.0, no RPM conversion
     // -----------------------------------------------------------------------
-    float collective_rpm = _param_rpm_hover.get();
+    float collective_throttle = 0.0f;
 
     const bool att_sp_valid = (_att_sp.timestamp > 0)
         && _control_mode.flag_control_attitude_enabled
@@ -256,39 +228,32 @@ void BoomerangController::_run_control_loop(float /*dt_s*/)
             || _control_mode.flag_control_offboard_enabled);
 
     if (att_sp_valid) {
-        const float thrust_norm = math::constrain(-_att_sp.thrust_body[2], 0.0f, 1.0f);
-        collective_rpm = _param_rpm_min.get()
-                       + thrust_norm * (_param_rpm_max.get() - _param_rpm_min.get());
+        // thrust_body[2] is negative for upward thrust in NED, so negate it.
+        collective_throttle = math::constrain(-_att_sp.thrust_body[2], 0.0f, 1.0f);
 
     } else if (_manual.timestamp > 0 && _control_mode.flag_control_manual_enabled) {
-        const float throttle = math::constrain(_manual.throttle, 0.0f, 1.0f);
-        collective_rpm = _param_rpm_min.get()
-                       + throttle * (_param_rpm_max.get() - _param_rpm_min.get());
+        collective_throttle = math::constrain(_manual.throttle, 0.0f, 1.0f);
     }
 
-    collective_rpm = math::constrain(collective_rpm, _param_rpm_min.get(), _param_rpm_max.get());
-
-
-    // Cyclic demand — virtual-body frame → NED frame rotation
+    // -----------------------------------------------------------------------
+    // Cyclic demand
+    // -----------------------------------------------------------------------
     float cyclic_roll_virt  = 0.0f;
     float cyclic_pitch_virt = 0.0f;
 
     const bool torque_valid = (_torque_sp.timestamp > 0);
 
     if (torque_valid && _control_mode.flag_control_attitude_enabled) {
-        // mc_rate_control outputs torque in the virtual body frame because it
-        // receives our despun rates.  Apply gain then rotate to NED below.
-        cyclic_roll_virt  = math::constrain(_torque_sp.xyz[0] * _param_torque_roll_gain.get(), -1.0f, 1.0f);
+        cyclic_roll_virt  = math::constrain(_torque_sp.xyz[0] * _param_torque_roll_gain.get(),  -1.0f, 1.0f);
         cyclic_pitch_virt = math::constrain(_torque_sp.xyz[1] * _param_torque_pitch_gain.get(), -1.0f, 1.0f);
 
     } else if (_manual.timestamp > 0 && _control_mode.flag_control_manual_enabled) {
-        // Stick demands are in the pilot/virtual-body frame.
         const float expo = _param_pilot_expo.get();
         cyclic_pitch_virt = _expo(_deadband(_manual.pitch, 0.05f), expo);
         cyclic_roll_virt  = _expo(_deadband(_manual.roll,  0.05f), expo);
     }
 
-    // Rotate virtual-body frame to NED frame
+    // Rotate virtual-body frame demands to NED frame
     const float c_hdg = cosf(_virtual_heading_rad);
     const float s_hdg = sinf(_virtual_heading_rad);
     const float cyclic_pitch_ned =  cyclic_pitch_virt * c_hdg + cyclic_roll_virt * s_hdg;
@@ -298,13 +263,13 @@ void BoomerangController::_run_control_loop(float /*dt_s*/)
     _dbg_torque_pitch = cyclic_pitch_ned;
 
     // -----------------------------------------------------------------------
-    // Cyclic mixer to per-blade flap commands
+    // Cyclic mixer → per-blade flap commands
     // -----------------------------------------------------------------------
     const CyclicMixerOutput mix = _cyclic_mixer->mix(cyclic_pitch_ned, cyclic_roll_ned, az.theta);
 
     OutputCommand cmd{};
-    cmd.armed          = true;
-    cmd.collective_rpm = collective_rpm;
+    cmd.armed               = true;
+    cmd.collective_throttle = collective_throttle;   // renamed from collective_rpm
     for (int i = 0; i < NUM_BLADES; ++i) {
         cmd.flap_cmd[i] = mix.flap_cmd[i];
     }
@@ -325,7 +290,6 @@ void BoomerangController::_capture_reference_heading(float heading_rad)
 
     _cyclic_mixer->set_phase_advance(_param_cyc_phase.get());
     _cyclic_mixer->set_max_deflection(_param_cyc_max_def.get());
-    _output_stage->set_rpm_limits(_param_rpm_min.get(), _param_rpm_max.get());
 }
 
 // ---------------------------------------------------------------------------
@@ -338,9 +302,6 @@ void BoomerangController::_update_params()
     if (_cyclic_mixer) {
         _cyclic_mixer->set_phase_advance(_param_cyc_phase.get());
         _cyclic_mixer->set_max_deflection(_param_cyc_max_def.get());
-    }
-    if (_output_stage) {
-        _output_stage->set_rpm_limits(_param_rpm_min.get(), _param_rpm_max.get());
     }
 }
 
@@ -448,6 +409,7 @@ int BoomerangController::print_status()
     PX4_INFO("torque_sp valid:    %s", (_torque_sp.timestamp > 0) ? "yes" : "no");
 
     if (_output_stage) {
+        PX4_INFO("throttle:           %.3f", (double)_output_stage->last_cmd.collective_throttle);
         PX4_INFO("flap[0..3]:         %.3f  %.3f  %.3f  %.3f",
                  (double)_output_stage->last_cmd.flap_cmd[0],
                  (double)_output_stage->last_cmd.flap_cmd[1],

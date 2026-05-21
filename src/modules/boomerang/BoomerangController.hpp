@@ -116,9 +116,9 @@ private:
     DEFINE_PARAMETERS(
         (ParamFloat<px4::params::BC_CYC_PHASE>)      _param_cyc_phase,
         (ParamFloat<px4::params::BC_CYC_MAX_DEF>)    _param_cyc_max_def,
-        (ParamFloat<px4::params::BC_RPM_MIN>)         _param_rpm_min,
-        (ParamFloat<px4::params::BC_RPM_MAX>)         _param_rpm_max,
-        (ParamFloat<px4::params::BC_RPM_HOVER>)       _param_rpm_hover,
+        // (ParamFloat<px4::params::BC_RPM_MIN>)         _param_rpm_min,
+        // (ParamFloat<px4::params::BC_RPM_MAX>)         _param_rpm_max,
+        // (ParamFloat<px4::params::BC_RPM_HOVER>)       _param_rpm_hover,
         (ParamFloat<px4::params::BC_VIRT_HDG>)        _param_virt_hdg,
         (ParamFloat<px4::params::BC_PILOT_EXPO>)      _param_pilot_expo,
         (ParamFloat<px4::params::BC_TILT_MAX>)        _param_tilt_max,
