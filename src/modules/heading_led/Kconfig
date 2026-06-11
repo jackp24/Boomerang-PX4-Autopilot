@@ -1,0 +1,5 @@
+menuconfig MODULES_HEADING_LED
+    bool "heading_led"
+    default n
+    ---help---
+        Enable the heading LED indicator module.
