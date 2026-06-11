@@ -153,6 +153,7 @@ void BoomerangController::_update_subscriptions()
     _sub_att_sp.update(&_att_sp);
     _sub_manual.update(&_manual);
     _sub_torque_sp.update(&_torque_sp);
+    _sub_attitude_virtual.update(&_attitude_virtual);
 }
 
 // ---------------------------------------------------------------------------
@@ -163,14 +164,15 @@ void BoomerangController::_publish_virtual_heading()
     const matrix::Quatf  q_ekf(_attitude.q);
     const matrix::Eulerf euler_ekf(q_ekf);
 
-    const matrix::Eulerf euler_virt(euler_ekf.phi(),
-                                    euler_ekf.theta(),
-                                    _virtual_heading_rad);
+    // const matrix::Eulerf euler_virt(euler_ekf.phi(),
+    //                                 euler_ekf.theta(),
+    //                                 _virtual_heading_rad);
+    const matrix::Eulerf euler_virt(0,0, _virtual_heading_rad);
     const matrix::Quatf q_virt(euler_virt);
 
     vehicle_attitude_s att_out = _attitude;
     q_virt.copyTo(att_out.q);
-    _pub_attitude_override.publish(att_out);
+    _pub_attitude_virtual.publish(att_out);
 }
 
 // ---------------------------------------------------------------------------

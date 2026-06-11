@@ -165,6 +165,7 @@ private:
     uORB::Subscription _sub_vehicle_status{ORB_ID(vehicle_status)};
     uORB::Subscription _sub_control_mode{ORB_ID(vehicle_control_mode)};
     uORB::Subscription _sub_attitude{ORB_ID(vehicle_attitude)};
+    uORB::Subscription _sub_attitude_virtual{ORB_ID(vehicle_attitude_virtual)};
     uORB::Subscription _sub_ang_vel{ORB_ID(vehicle_angular_velocity)};
     uORB::Subscription _sub_local_pos{ORB_ID(vehicle_local_position)};
     uORB::Subscription _sub_att_sp{ORB_ID(vehicle_attitude_setpoint)};
@@ -177,7 +178,7 @@ private:
 
     // Override publications — these stomp the EKF2 originals so that upstream
     // modules (mc_att_control, mc_rate_control) operate in the virtual frame.
-    uORB::Publication<vehicle_attitude_s>         _pub_attitude_override{ORB_ID(vehicle_attitude)};
+    uORB::Publication<vehicle_attitude_s>         _pub_attitude_virtual{ORB_ID(vehicle_attitude_virtual)};
     uORB::Publication<vehicle_angular_velocity_s> _pub_ang_vel_override{ORB_ID(vehicle_angular_velocity)};
 
     // ------------------------------------------------------------------
@@ -186,6 +187,7 @@ private:
     vehicle_status_s            _vehicle_status{};
     vehicle_control_mode_s      _control_mode{};
     vehicle_attitude_s          _attitude{};
+    vehicle_attitude_s          _attitude_virtual{};
     vehicle_angular_velocity_s  _ang_vel{};
     vehicle_local_position_s    _local_pos{};
     vehicle_attitude_setpoint_s _att_sp{};

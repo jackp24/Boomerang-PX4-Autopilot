@@ -51,10 +51,10 @@ void OutputStage::write(const OutputCommand &cmd)
     servos.timestamp_sample = now;
 
     for (int i = 0; i < NUM_BLADES; ++i) {
-        // servos.control[i] = cmd.armed
-                            // ? math::constrain(cmd.flap_cmd[i], -1.0f, 1.0f)
-                            // : 0.0f;
-        servos.control[i] = -0.3f;
+        servos.control[i] = cmd.armed
+                            ? math::constrain(cmd.flap_cmd[i], -1.0f, 1.0f)
+                            : 0.0f;
+        // servos.control[i] = -0.3f;
     }
     for (int i = NUM_BLADES; i < actuator_servos_s::NUM_CONTROLS; ++i) {
         servos.control[i] = 0.0f;

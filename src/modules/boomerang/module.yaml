@@ -205,3 +205,12 @@ parameters:
         increment: 0.1
         default: 4.0
         reboot_required: false
+
+      BMG_LED_WIN:
+        description:
+          short: Heading LED window half-width
+        type: float
+        unit: deg
+        default: 10.0
+        min: 1.0
+        max: 45.0

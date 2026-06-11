@@ -43,3 +43,7 @@ land_detector start multicopter
 # boomerang_controller begins its first loop tick.
 #
 boomerang start
+# pause to let boomerang_controller start and publish its first vehicle_attitude_virtual
+sleep 1
+
+heading_led start
