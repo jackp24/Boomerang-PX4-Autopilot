@@ -1,0 +1,63 @@
+__max_num_config_instances: 1
+
+module_name: BoomerangEstimator
+
+parameters:
+  - group: Boomerang
+    definitions:
+
+      BC_VIRT_HDG:
+        description:
+          short: Virtual heading (NED, radians)
+          long: |
+            The NED yaw angle published as vehicle_attitude_virtual.
+            Captured automatically at startup by averaging EKF2 yaw over ~0.25 s.
+            Overwritten at each boot; modifying in QGC only takes effect if
+            heading capture fails.
+        type: float
+        unit: rad
+        min: -3.1416
+        max:  3.1416
+        decimal: 4
+        increment: 0.01
+        default: 0.0
+        reboot_required: false
+      BC_CYC_PHASE:
+        description:
+          short: Cyclic mixer phase advance
+          long: |
+            Phase lead angle (rad) added to blade azimuth before the despin
+            transform. Compensates for servo lag and gyroscopic precession.
+            Start at 0.0 and increase in ~0.17 rad (10 deg) steps if stick
+            forward produces sideways motion instead of forward motion.
+        type: float
+        unit: rad
+        min: -3.14
+        max:  3.14
+        decimal: 3
+        increment: 0.052
+        default: 0.0
+
+      BC_CYC_MAX_DEF:
+        description:
+          short: Maximum cyclic flap deflection
+          long: |
+            Ceiling on the normalised flap command sent to each servo.
+            1.0 = full servo range. Keep at 0.5 or lower during initial tuning.
+        type: float
+        unit: ''
+        min: 0.0
+        max: 1.0
+        decimal: 2
+        increment: 0.05
+        default: 0.5
+
+      BC_LED_WIN:
+        description:
+          short: Heading LED window half-width
+        type: float
+        unit: deg
+        default: 10.0
+        min: 1.0
+        max: 45.0
+

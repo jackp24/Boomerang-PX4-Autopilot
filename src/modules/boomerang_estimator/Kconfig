@@ -1,0 +1,6 @@
+menuconfig MODULES_BOOMERANG_ESTIMATOR
+    bool "boomerang_estimator"
+    default n
+    ---help---
+        Boomerang companion estimator. Publishes vehicle_attitude_virtual,
+        despun vehicle_angular_velocity, and boomerang_azimuth.
