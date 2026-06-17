@@ -206,7 +206,7 @@ parameters:
         default: 4.0
         reboot_required: false
 
-      BMG_LED_WIN:
+      BC_LED_WIN:
         description:
           short: Heading LED window half-width
         type: float

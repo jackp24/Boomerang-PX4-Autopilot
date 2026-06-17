@@ -33,6 +33,7 @@ parameters:
                 13: Rover (Mecanum)
                 14: Spacecraft 2D
                 15: Spacecraft 3D
+                16: Boomerang
             default: 0
 
         CA_METHOD:
@@ -1315,3 +1316,28 @@ mixer:
                             function: 'axisz'
                           - name: 'CA_ROTOR${i}_CT'
                             label: "Thrust\nCoefficient"
+
+            16: # Boomerang
+              title: 'Boomerang'
+              actuators:
+                - actuator_type: 'motor'
+                  count: 4
+                  item_label_prefix: ['Rotor']
+                - actuator_type: 'servo'
+                  group_label: 'Blade flap servos'
+                  count: 'CA_SP0_COUNT'
+                  per_item_parameters:
+                      extra:
+                        - name: 'CA_SP0_ANG${i}'
+                          label: 'Blade Offset Angle'
+                        - name: 'CA_SP0_ARM_L${i}'
+                          label: 'Arm Length (relative)'
+                        - name: 'CA_SV_CS${i}_TRIM'
+                          label: 'Trim'
+                  parameters:
+                    - label: 'Cyclic phase advance (rad)'
+                      name: BC_CYC_PHASE
+                    - label: 'Max cyclic flap deflection'
+                      name: BC_CYC_MAX_DEF
+                    - label: 'Throttle spoolup time'
+                      name: COM_SPOOLUP_TIME

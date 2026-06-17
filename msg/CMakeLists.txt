@@ -48,6 +48,7 @@ set(msg_files
 	AirspeedWind.msg
 	AutotuneAttitudeControlStatus.msg
 	BatteryInfo.msg
+	boomerang_azimuth.msg
 	ButtonEvent.msg
 	CameraCapture.msg
 	CameraStatus.msg
@@ -117,6 +118,7 @@ set(msg_files
 	GpsDump.msg
 	GpsInjectData.msg
 	Gripper.msg
+	heading_led.msg
 	HealthReport.msg
 	HeaterStatus.msg
 	HoverThrustEstimate.msg

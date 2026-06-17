@@ -1,6 +1,8 @@
 px4_add_library(VehicleActuatorEffectiveness
 	ActuatorEffectivenessUUV.cpp
 	ActuatorEffectivenessUUV.hpp
+	ActuatorEffectivenessBoomerang.cpp
+	ActuatorEffectivenessBoomerang.hpp
 	ActuatorEffectivenessControlSurfaces.cpp
 	ActuatorEffectivenessControlSurfaces.hpp
 	ActuatorEffectivenessCustom.cpp

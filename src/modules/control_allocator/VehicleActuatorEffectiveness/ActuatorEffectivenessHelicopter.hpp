@@ -125,7 +125,7 @@ private:
 
 	Geometry _geometry{};
 
-	int _first_swash_plate_servo_index{};
+
 	SaturationFlags _saturation_flags;
 
 	// Throttle spoolup state
@@ -137,6 +137,8 @@ private:
 	bool _main_motor_engaged{true};
 
 	const ActuatorType _tail_actuator_type;
+protected:
+	int _first_swash_plate_servo_index{};
 
 #if CONTROL_ALLOCATOR_RPM_CONTROL
 	RpmControl _rpm_control {this};

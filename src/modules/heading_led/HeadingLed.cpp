@@ -10,7 +10,7 @@
 // *** FILL THIS IN after: grep -n "FMU_CH5\|AUX5" boards/cubepilot/cubeorangeplus/src/board_config.h
 // Example form (fmu-v5): GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_2MHz|GPIO_OUTPUT_CLEAR|GPIO_PORTD|GPIO_PIN13
 // -----------------------------------------------------------------------
-#define GPIO_HEADING_LED  /* PD14 */ (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_2MHz|GPIO_OUTPUT_CLEAR|GPIO_PORTD|GPIO_PIN14)
+#define GPIO_HEADING_LED  /* PD14 */ (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_25MHz|GPIO_OUTPUT_CLEAR|GPIO_PORTD|GPIO_PIN14)
 
 HeadingLed::HeadingLed()
     : ModuleParams(nullptr)
@@ -20,8 +20,19 @@ HeadingLed::HeadingLed()
 bool HeadingLed::init()
 {
     updateParams();
-    px4_arch_configgpio(GPIO_HEADING_LED);
-    px4_arch_gpiowrite(GPIO_HEADING_LED, false);
+
+    // Wait for PWM output driver to finish initializing and release AUX pins
+    // px4_sleep(2);  //2 seconds — adjust if needed
+    // px4_arch_configgpio(GPIO_HEADING_LED);
+
+    // // Blink the LED a few times on startup to indicate the module is running
+    // for (int i = 0; i < 5; i++) {
+    //      px4_arch_gpiowrite(GPIO_HEADING_LED, true);
+    //      px4_sleep(1);  // 1s on
+    //      px4_arch_gpiowrite(GPIO_HEADING_LED, false);
+    //      px4_sleep(1);  // 1s off
+    // }
+
     ScheduleOnInterval(static_cast<uint32_t>(1e6f / LOOP_RATE_HZ));
     _loop_perf = perf_alloc(PC_INTERVAL, "my_module_loop_interval");
     PX4_INFO("heading_led: started");
@@ -41,20 +52,55 @@ void HeadingLed::Run()
         return;
     }
 
+    // Defer GPIO configuration until 3s after boot
+    if (!_gpio_configured) {
+        if ((hrt_absolute_time() - _start_time_us) < 3_s) {
+            return;
+        }
+        px4_arch_configgpio(GPIO_HEADING_LED);
+        // px4_arch_gpiowrite(GPIO_HEADING_LED, false);
+
+        // Blink the LED a few times on startup to indicate the module is running
+        for (int i = 0; i < 5; i++) {
+             px4_arch_gpiowrite(GPIO_HEADING_LED, true);
+             if (i < 4) {
+                 px4_usleep(500000);  // 0.5s on
+             }
+             else {
+                 px4_usleep(1000000);  // 1s on for the last blink
+             }
+             px4_arch_gpiowrite(GPIO_HEADING_LED, false);
+             px4_usleep(500000);  // 0.5s off
+        }
+
+
+        _gpio_configured = true;
+        PX4_INFO("heading_led: GPIO configured");
+    }
+
     // Refresh params on change
+
+
+    _sub_attitude_virtual.update(&_attitude_virtual);
+
     parameter_update_s param_upd{};
     if (_sub_param_update.update(&param_upd)) {
         updateParams();
     }
 
     if (!_sub_attitude.update(&_attitude) || _attitude.timestamp == 0) {
+        return;
+    }
+
+    if (_attitude_virtual.timestamp == 0) {
         px4_arch_gpiowrite(GPIO_HEADING_LED, false);
         return;
     }
 
+
     const float yaw     = matrix::Eulerf(matrix::Quatf(_attitude.q)).psi();
-    // const float ref     = _param_ref_hdg.get();                        // rad
-    const float ref     = matrix::Eulerf(matrix::Quatf(_attitude_virtual.q)).psi();  // rad, from virtual attitude
+    // const float ref     = _param_ref_hdg.get();                        // rad from parameters
+    const float ref     = matrix::Eulerf(matrix::Quatf(_attitude_virtual.q)).psi();  // rad, from virtual attitude message
     const float win_rad = math::radians(_param_window.get());          // deg → rad
 
     // Shortest angular distance with wraparound
@@ -65,6 +111,15 @@ void HeadingLed::Run()
     const bool in_window = (fabsf(diff) <= win_rad);
     px4_arch_gpiowrite(GPIO_HEADING_LED, in_window);
     // px4_arch_gpiowrite(GPIO_HEADING_LED, true);
+
+    // Prepare the heading_led_status logging message
+    heading_led_s heading_led_msg{};
+    heading_led_msg.timestamp = led_curr_time;
+    heading_led_msg.led_on = in_window;
+
+    // Publish
+    _heading_led_pub.publish(heading_led_msg);
+
 }
 
 ModuleBase::Descriptor HeadingLed::_descriptor{

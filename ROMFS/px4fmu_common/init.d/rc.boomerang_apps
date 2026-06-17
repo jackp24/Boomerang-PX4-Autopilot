@@ -1,49 +1,63 @@
 #!/bin/sh
 #
-# Apps for the propeller-driven helicopter blade vehicle.
+# Apps for the propeller-driven helicopter blade (Boomerang) vehicle.
 #
-# Replaces mc_apps for this airframe.
-# Omits control_allocator and mc_rate_control — both are replaced
-# by boomerang_controller which owns actuator_motors and actuator_servos
-# directly and does its own azimuth-scheduled mixing.
+# ARCHITECTURE
+# ────────────
+# boomerang_estimator  — companion observer: publishes vehicle_attitude_virtual,
+#                        despun vehicle_angular_velocity, and boomerang_azimuth.
+#                        Must start BEFORE mc_att_control and control_allocator
+#                        so overridden topics are live before consumers start.
+#
+# mc_att_control       — reads vehicle_attitude_virtual (modified to subscribe
+#                        to that topic instead of vehicle_attitude).
+#
+# mc_rate_control      — reads despun vehicle_angular_velocity override.
+#
+# control_allocator    — uses ActuatorEffectivenessBoomerang (CA_AIRFRAME=15),
+#                        reads boomerang_azimuth for live blade azimuths.
+#                        Must start AFTER boomerang_estimator.
+#
+# START ORDER MATTERS — do not reorder.
 
-# Safety net: if control_allocator or mc_rate_control were started by
-# any earlier script, stop them now before boomerang takes ownership
-# of actuator_motors and actuator_servos.
-#mc_rate_control stop > /dev/null 2>&1
-control_allocator stop > /dev/null 2>&1
+# -----------------------------------------------------------------------
+# 1. Estimator first — overrides vehicle_angular_velocity and publishes
+#    vehicle_attitude_virtual before any consumer starts.
+# -----------------------------------------------------------------------
+boomerang_estimator start
 
+# Brief pause to ensure first publications are live before consumers start
+sleep 1
+
+# -----------------------------------------------------------------------
+# 2. Attitude and rate control — both now operate in the virtual frame.
+#    MC_YAW_WEIGHT=0 should be set in parameters (yaw not controllable).
+# -----------------------------------------------------------------------
+mc_att_control start
 mc_rate_control start
 
-#
-# Start Multicopter Attitude Controller.
-# mc_att_control runs normally but with MC_YAW_WEIGHT=0 so it
-# ignores yaw error (yaw is not controllable on this vehicle).
-#
-mc_att_control start
+# -----------------------------------------------------------------------
+# 3. Control allocator — uses ActuatorEffectivenessBoomerang.
+#    CA_AIRFRAME must be set to 15 (Boomerang) in parameters.
+# -----------------------------------------------------------------------
+control_allocator start
 
-
-#
-# Start Multicopter Position Controller stack.
-#
+# -----------------------------------------------------------------------
+# 4. Position control stack.
+# -----------------------------------------------------------------------
 mc_hover_thrust_estimator start
 flight_mode_manager start
 mc_pos_control start
 
-#
-# Start Land Detector.
-#
+# -----------------------------------------------------------------------
+# 5. Land detector.
+# -----------------------------------------------------------------------
 land_detector start multicopter
 
-#
-# Start the boomerang controller.
-# This replaces mc_rate_control and control_allocator.
-# Must start AFTER mc_att_control and mc_pos_control so that
-# vehicle_attitude_setpoint is already being published when
-# boomerang_controller begins its first loop tick.
-#
-boomerang start
-# pause to let boomerang_controller start and publish its first vehicle_attitude_virtual
-sleep 1
-
+# -----------------------------------------------------------------------
+# 6. Heading LED indicator.
+#    Reads vehicle_attitude_virtual for current yaw and BC_VIRT_HDG for
+#    the reference heading written by boomerang_estimator at startup.
+# -----------------------------------------------------------------------
+# sleep 10
 heading_led start
