@@ -35,9 +35,9 @@ BoomerangEstimator::~BoomerangEstimator()
 bool BoomerangEstimator::init()
 {
     updateParams();
+    _loop_perf = perf_alloc(PC_ELAPSED, "boomerang_estimator: loop time");
     ScheduleOnInterval(static_cast<uint32_t>(1e6f / LOOP_RATE_HZ));
     PX4_INFO("boomerang_estimator: started at %.0f Hz", (double)LOOP_RATE_HZ);
-    _loop_perf = perf_alloc(PC_ELAPSED, "boomerang_estimator: loop time");
     return true;
 }
 

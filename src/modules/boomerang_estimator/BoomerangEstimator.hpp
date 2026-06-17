@@ -135,5 +135,5 @@ private:
     void _publish_virtual_attitude();
     void _publish_despun_rates(float ekf_yaw_rad);
     void _publish_azimuth(float ekf_yaw_rad, float yaw_rate);
-    perf_counter_t	_loop_perf;
+    perf_counter_t _loop_perf{nullptr};
 };
