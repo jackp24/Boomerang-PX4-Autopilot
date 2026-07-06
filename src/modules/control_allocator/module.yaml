@@ -567,9 +567,9 @@ parameters:
           type: float
           decimal: 0
           increment: 1
-          min: 100
-          max: 10000
-          default: 1500
+          min: 0
+          max: 1000
+          default: 0
         CA_HELI_RPM_P:
           description:
             short: Proportional gain for rpm control

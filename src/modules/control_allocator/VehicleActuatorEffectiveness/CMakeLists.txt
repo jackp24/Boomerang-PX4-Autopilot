@@ -33,6 +33,8 @@ px4_add_library(VehicleActuatorEffectiveness
 	ActuatorEffectivenessRoverAckermann.cpp
 	RpmControl.hpp
 	RpmControl.cpp
+	RpmControlBoomerang.hpp
+	RpmControlBoomerang.cpp
 )
 
 target_compile_options(VehicleActuatorEffectiveness PRIVATE ${MAX_CUSTOM_OPT_LEVEL})

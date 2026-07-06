@@ -35,6 +35,7 @@
 #pragma once
 
 #include <ActuatorEffectivenessHelicopter.hpp>
+#include <RpmControlBoomerang.hpp>
 
 #include <uORB/Subscription.hpp>
 #include <uORB/topics/boomerang_azimuth.h>
@@ -69,4 +70,6 @@ private:
         (ParamFloat<px4::params::BC_CYC_PHASE>)   _param_phase_advance,
         (ParamFloat<px4::params::BC_CYC_MAX_DEF>) _param_max_deflection
     )
+
+    RpmControlBoomerang _rpm_control {this};
 };

@@ -85,7 +85,7 @@ public:
 			    const ActuatorVector &actuator_min, const ActuatorVector &actuator_max) override;
 
 	void getUnallocatedControl(int matrix_index, control_allocator_status_s &status) override;
-private:
+protected:
 	float throttleSpoolupProgress();
 	bool mainMotorEnaged();
 	float getLinearServoOutput(float input) const;
@@ -137,7 +137,7 @@ private:
 	bool _main_motor_engaged{true};
 
 	const ActuatorType _tail_actuator_type;
-protected:
+// protected:
 	int _first_swash_plate_servo_index{};
 
 #if CONTROL_ALLOCATOR_RPM_CONTROL

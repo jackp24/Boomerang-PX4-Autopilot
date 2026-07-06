@@ -19,6 +19,7 @@ void ActuatorEffectivenessBoomerang::updateSetpoint(
     const ActuatorVector &actuator_min,
     const ActuatorVector &actuator_max)
 {
+    PX4_INFO("Boomerang: updateSetpoint: called");
     // Pull latest azimuth state from BoomerangEstimator
     _sub_azimuth.update(&_azimuth);
 
@@ -29,8 +30,8 @@ void ActuatorEffectivenessBoomerang::updateSetpoint(
     // the fixed CA_SP0_ANG geometry — we overwrite those below with the live
     // despin result.
     // -----------------------------------------------------------------------
-    ActuatorEffectivenessHelicopter::updateSetpoint(
-        control_sp, matrix_index, actuator_sp, actuator_min, actuator_max);
+    // ActuatorEffectivenessHelicopter::updateSetpoint(
+        // control_sp, matrix_index, actuator_sp, actuator_min, actuator_max);
 
     // -----------------------------------------------------------------------
     // If azimuth state is not yet valid, leave the parent's output unchanged.
@@ -40,6 +41,36 @@ void ActuatorEffectivenessBoomerang::updateSetpoint(
     if (!_azimuth.valid) {
         return;
     }
+
+    _saturation_flags = {};
+
+    PX4_INFO("Boomerang: updateSetpoint: azimuth valid");
+
+	const float spoolup_progress = throttleSpoolupProgress();
+	float rpm_control_output = 0;
+
+    // _rpm_control.setSpoolupProgress(spoolup_progress);
+	// rpm_control_output = _rpm_control.getActuatorCorrection();
+
+	// throttle/collective pitch curve
+	const float throttle = (math::interpolateN(-control_sp(ControlAxis::THRUST_Z), _geometry.throttle_curve)
+				+ rpm_control_output) * spoolup_progress;
+	const float collective_pitch = math::interpolateN(-control_sp(ControlAxis::THRUST_Z), _geometry.pitch_curve);
+
+	// actuator mapping
+	actuator_sp(0) = mainMotorEnaged() ? throttle : NAN;
+
+	actuator_sp(1) = control_sp(ControlAxis::YAW) * _geometry.yaw_sign
+			 + fabsf(collective_pitch - _geometry.yaw_collective_pitch_offset) * _geometry.yaw_collective_pitch_scale
+			 + throttle * _geometry.yaw_throttle_scale;
+
+	// Saturation check for yaw
+	if (actuator_sp(1) < actuator_min(1)) {
+		setSaturationFlag(_geometry.yaw_sign, _saturation_flags.yaw_neg, _saturation_flags.yaw_pos);
+
+	} else if (actuator_sp(1) > actuator_max(1)) {
+		setSaturationFlag(_geometry.yaw_sign, _saturation_flags.yaw_pos, _saturation_flags.yaw_neg);
+	}
 
     // -----------------------------------------------------------------------
     // Extract normalised cyclic demands from the control setpoint.
