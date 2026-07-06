@@ -3,7 +3,7 @@
 # Propeller-driven helicopter blade vehicle
 #
 # @name Boomerang
-# @type Quadrotor x
+# @type Helicopter
 # @class Copter
 #
 
@@ -16,9 +16,11 @@
 echo "START AIRFRAME"
 
 
-. ${R}etc/init.d/rc.mc_defaults
+# . ${R}etc/init.d/rc.mc_defaults
+. ${R}etc/init.d/rc.heli_defaults
+echo "AFTER HELI DEFAULTS"
 
-echo "AFTER MC DEFAULTS"
+param set-default CA_AIRFRAME 16
 
 # Tell rcS to source our custom apps script instead of rc.mc_apps.
 # rcS checks this variable and skips the default mc apps entirely when set.
